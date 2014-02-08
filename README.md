@@ -405,7 +405,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
     echo "test"
     touch /tmp/t.log
     
-    $ get_instance_by_service picupload.xxx.all | head -3  | pdo -e t.sh
+    $ cat 1.host | pdo -e t.sh
     >>>> Welcome ajian...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work
