@@ -191,11 +191,7 @@ func main() {
         checkErr(1, err)
     }
 
-    if *product != "" {
-        Arrhost, _ = ListProductMysql(conn, *product)
-    } else if *app != "" {
-        Arrhost, _ = ListAppMysql(conn, *app)
-    } else if *hostFile != "" {
+    if *hostFile != "" {
         file, err := os.Open(*hostFile)
         checkErr(1, err)
         Arrhost, _ = ListFile(file)

@@ -19,6 +19,12 @@
     go get github.com/cihub/seelog
     go get github.com/robfig/config
 
+安装go 环境.
+
+    go build pdo.go
+
+配置文件目录,默认在~/.pdo.如果不在此处指定.
+
 ## pdo 结构
 
 ### pdo 来源
@@ -42,6 +48,13 @@
         [IDC]
         JX:yf01,cq01,dbl01,ai01
         TC:cq02,tc,m1,db01
+
+### 日志记录
+
+日志主要记录使用者,使用过的命令,保证多人操作的时候可以查看到.
+
+日志配置文件查看github.com/cihub/seelog
+主配置文件格式查看github.com/robfig/config
         
 ### pdo 功能
 
