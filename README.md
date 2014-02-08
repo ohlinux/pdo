@@ -27,16 +27,16 @@
 
 ## pdo 结构
 
-### pdo 来源
+### pdo 处理对象来源
 
-获取机器列表和相对应的路径有三种途径.
+获取机器列表和相对应的路径有三种途径.(这里去掉了数据库这种特定的)
 
 1. -f 文件,host的列表文件,可以是一列,也可以是两列有相关的目录依赖.后面有例子.
 2. -a app名字;-p 产品名;-a支持多app采用 app1,app2逗号分隔. (这个是数据库的来源,因为是特定环境的所以不再有)
 3. 标准输入 cat 1.host | pdo
 4. -R当使用的时候,可以自动生成失败的列表.详细查看例子"Retry功能"
 
-### pdo 过滤
+### pdo 列表过滤
 
 如果列表名称是这样的结构,xxx.yyy 那么过滤的就是yyy,如果没有这个需要,可以忽略.
 
@@ -141,7 +141,7 @@
 
 -cmd为缩写命令= bash bin/xxxControl.sh N%%N%%N%%restart
 
-    work@yf-xxx-apollo.yf01:godir$ pdo -f 1.list  -cmd restart
+    $ pdo -f 1.list  -cmd restart
     >>>> Welcome ajian...
     yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
     yf-xxx-app03.yf01        -/home/work/xxx001    yf-xxx-app04.yf01        -/home/work/xxx001
@@ -165,7 +165,7 @@
 
 使用带-o 指定输出目录,将不会再打印在屏幕上,主要是对grep日志这种需求使用.速度要比屏幕打印快很多,是实时写入.
     
-    work@yf-xxx-apollo.yf01:godir$ cat 1.list | pdo -o xxxout "pwd"
+    $ cat 1.list | pdo -o xxxout "pwd"
     >>>> Welcome ajian...
     yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
     yf-xxx-app03.yf01        -/home/work/xxx001    yf-xxx-app04.yf01        -/home/work/xxx001
@@ -219,7 +219,7 @@
 
 这里的1.log是一个大文件.
 
-    work@yf-xxx-apollo.yf01:godir$ pdo -f 1.list -t 1s -o out/ -r 3 "cat 1.log"
+    $ pdo -f 1.list -t 1s -o out/ -r 3 "cat 1.log"
     >>>> Welcome ajian...
     yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
     yf-xxx-app03.yf01        -/home/work/xxx001    yf-xxx-app04.yf01        -/home/work/xxx001
@@ -273,7 +273,7 @@
 
 copy文件其实是可以copy目录的,只要远端的目录是存在的就不会报错.
 
-    work@yf-xxx-apollo.yf01:upload_server$ cat 1.host  | pdo -c get.sh /tmp/
+    $ cat 1.host  | pdo -c get.sh /tmp/
     >>>> Welcome ajian...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work
@@ -291,7 +291,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
     [3/3] yf-xxx-upload02.yf01  [SUCCESS].
     
     //检查下文件 
-    work@yf-xxx-apollo.yf01:upload_server$ cat 1.host | pdo "ls /tmp/get.sh"
+    $ cat 1.host | pdo "ls /tmp/get.sh"
     >>>> Welcome ajian...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work
@@ -317,7 +317,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
 
 这次多加两台服务器,有两台是没有这个上面脚本文件的.所以新加的服务器会报错.
 
-    work@yf-xxx-apollo.yf01:upload_server$ cat 2.list | pdo "ls /tmp/get.sh"
+    $ cat 2.list | pdo "ls /tmp/get.sh"
     >>>> Welcome ajian...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
@@ -345,7 +345,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
     ls: /tmp/get.sh: No such file or directory
     
     //使用-R 就可以直接拿到上一次执行失败的列表.
-    work@yf-xxx-apollo.yf01:upload_server$pdo -R "ls /tmp/get.sh"
+    $pdo -R "ls /tmp/get.sh"
     >>>> Welcome ajian...
     yf-xxx-upload03.yf01     -/home/work           yf-xxx-upload04.yf01     -/home/work
     
@@ -358,7 +358,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
     ls: /tmp/get.sh: No such file or directory
     
     //如果是使用的ctrl+C中断了列表,-R会记录未执行完(包括已经执行但失败的列表)
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -5  | pdo  -T 10s "ls /tmp/get.sh"
+    $ cat 1.host | pdo  -T 10s "ls /tmp/get.sh"
     >>>> Welcome ajian...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
@@ -376,7 +376,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
     [2/5] yf-xxx-upload01.yf01  [SUCCESS].
     /tmp/get.sh
     
-    ^Cwork@yf-xxx-apollo.yf01:upload_server$ pdo -R "ls /tmp/get.sh"
+    ^C$ pdo -R "ls /tmp/get.sh"
     >>>> Welcome ajian...
     yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
     yf-xxx-upload04.yf01     -/home/work
@@ -392,14 +392,14 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
  
  ### -e脚本执行功能
 
-    work@yf-xxx-apollo.yf01:upload_server$ cat t.sh
+    $ cat t.sh
     #!/bin/bash
 
     cd /tmp/ && pwd
     echo "test"
     touch /tmp/t.log
     
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo -e t.sh
+    $ get_instance_by_service picupload.xxx.all | head -3  | pdo -e t.sh
     >>>> Welcome ajian...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work
@@ -419,13 +419,13 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
 
 * 配置中可以自己添加模板
 
-        work@yf-xxx-apollo.yf01:godir$ cat ~/.pdo/pdo.conf
+        $ cat ~/.pdo/pdo.conf
         [TEMPLATE]
         container : /home/work/.pdo/template/container.sh
         
 * 模板内容,这个模版主要是在一台服务器上的xxxxxx目录里面进行操作. {{.CMD}} 就是会被替换的位置.
 
-        work@yf-xxx-apollo.yf01:godir$ cat /home/work/.pdo/template/container.sh
+        $ cat /home/work/.pdo/template/container.sh
         #!/bin/bash
         grep -l "^appName:" /home/work/xxx[0-9][0-9][0-9]/xxx.conf | while read file  ; do
         eval $(awk '{if($1 ~ /xxxPath/){printf "apppath=%s\n",$2};if($1 ~ /appName/){printf "appName=%s",$2}}' $file)
@@ -440,7 +440,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
         
 * 使用嵌入命令
  
-            work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest -temp container "pwd"
+            $ pdo -a xxxtest -temp container "pwd"
             >>>> Welcome ajian...
             yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/xxx001
             yf-xxx-app00.yf01        -/home/work/xxx001    yf-xxx-app0148.yf01      -/home/work/xxx004
@@ -475,13 +475,13 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
 * 还可以嵌入脚本
 
         //脚本内容
-        work@yf-xxx-apollo.yf01:godir$ cat 1.sh
+        $ cat 1.sh
         
         echo "1.sh"
         pwd
        
         //嵌入脚本使用-b
-        work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest -temp container -b 1.sh
+        $ pdo -a xxxtest -temp container -b 1.sh
         >>>> Welcome ajian...
         yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/xxx001
         yf-xxx-app00.yf01        -/home/work/xxx001    yf-xxx-app0148.yf01      -/home/work/xxx004
