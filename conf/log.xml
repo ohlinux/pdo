@@ -1,0 +1,17 @@
+<seelog minlevel="info">
+    <outputs formatid="common">
+        <rollingfile type="size" filename="/home/work/.pdo/log/roll.log" maxsize="100000" maxrolls="5"/>
+        <filter levels="critical">
+            <file path="/home/work/.pdo/log/critical.log" formatid="critical"/>
+        </filter>
+        <filter levels="warn">
+            <console formatid="colored"/>
+        </filter>
+    </outputs>
+    <formats>
+        <format id="colored"  format="%Time %EscM(46)%Level%EscM(49) %Msg%n%EscM(0)"/>
+        <format id="common" format="%Date/%Time [%LEV] %Msg%n" />
+        <format id="critical" format="%File %FullPath %Func %Msg%n" />
+        <format id="criticalemail" format="Critical error on our server!\n    %Time %Date %RelFile %Func %Msg \nSent by Seelog"/>
+    </formats>
+</seelog>
