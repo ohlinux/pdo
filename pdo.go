@@ -3,7 +3,7 @@ package main
 import (
     "bufio"
     "bytes"
-    "database/sql"
+//    "database/sql"
     "flag"
     "fmt"
     "io"
@@ -162,7 +162,7 @@ func main() {
         os.Exit(0)
     }
 
-    var conn, sTemplate string
+    var sTemplate string
     cmdline := strings.Join(flag.Args(), "\"")
     //pid, _ := GetPID()
     pid := strconv.Itoa(os.Getppid())
@@ -181,16 +181,6 @@ func main() {
     //record input args
     log.Info(SUDO_USER + " " + pid + " Do: " + strings.Join(os.Args, " "))
     log.Flush()
-    if *product != "" || *app != "" {
-        dbhost, err := c.String("Mysql", "Host")
-        dbport, err := c.String("Mysql", "Port")
-        dbuser, err := c.String("Mysql", "User")
-        dbpass, err := c.String("Mysql", "Pass")
-        dbname, err := c.String("Mysql", "DBname")
-        conn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbuser, dbpass, dbhost, dbport, dbname)
-        checkErr(1, err)
-    }
-
     if *hostFile != "" {
         file, err := os.Open(*hostFile)
         checkErr(1, err)
