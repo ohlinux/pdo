@@ -128,7 +128,7 @@ func YesNO() {
     }
 }
 
-//parse file , .
+//parse file .
 func ListFile(file *os.File) ([]HostList, error) {
     var L HostList
     var Lists []HostList
