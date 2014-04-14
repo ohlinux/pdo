@@ -72,6 +72,7 @@ type Pdo struct{
     ScriptFile      string
     CopyFile        string
     Jobs             Job
+    Pause           bool
 }
 
 type Job struct {
@@ -82,6 +83,7 @@ type Job struct {
 type Result struct {
     jobname    string
     resultcode int
+    finished   int
     resultinfo string
 }
 
@@ -252,7 +254,7 @@ func (pdo *Pdo)doRequest() {
         go pdo.doJob(done, jobs) 
     }
 
-    go awaitCompletion(done, results,pdo.Concurrent)
+    go pdo.awaitCompletion(done, results,pdo.Concurrent)
 
     processResults(results)
 }
@@ -263,16 +265,17 @@ func (pdo *Pdo)addJob(jobs chan<- Job, jobnames []HostList, results chan<- Resul
         jobs <- Job{jobname,results}
         if ! pdo.QuietOption && num == 0{
            for {
-                if pdo.JobFinished == 1 {
+                if pdo.Pause {
                     YesNO() 
                     break
                 }else{
                     time.Sleep(1 * time.Second) 
+                    fmt.Println(pdo.Pause)
                 }
             } 
         }
     }
-    close(jobs)
+    //close(jobs)
 }
 
 //处理job
@@ -285,9 +288,16 @@ func (pdo *Pdo)doJob(done chan<- struct{}, jobs <-chan Job) {
 }
 
 //job完成状态
-func awaitCompletion(done <-chan struct{}, results chan Result,works int) {
+func (pdo *Pdo)awaitCompletion(done <-chan struct{}, results chan Result,works int) {
     for i := 0; i < works; i++ {
         <-done
+        if ! pdo.QuietOption {
+            res := <- results
+            fmt.Println(res)
+            if res.finished == 1 {
+                pdo.Pause=true 
+            }
+        }
     }
     close(results)
 }
@@ -514,6 +524,7 @@ func (pdo *Pdo) Do(job *Job){
             }
         }
     }
+    job.results <- Result{job.jobname.Host,0,1,"Finishedxxx"} 
 //
 }
 
