@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const AppVersion = "Version 2.0.20140803"
+const AppVersion = "Version 2.0.20140808"
 
 var (
 	SUDO_USER  = os.Getenv("SUDO_USER")
@@ -40,6 +40,7 @@ var (
 	app        = flag.String("a", "", "input app name.")
 	mstring    = flag.String("match", "", "match a string with color.")
 	mrule      = flag.String("rule", "", "rule for match string in conf.")
+	grephost   = flag.String("host", "", "get the host list.")
 	//    argsConf   = flag.String("c", "", "args conf,save to file.")
 	//copy       = flag.String("c", "", "Copy <file> to destination as <dest_path>. If notspecified, <dest_path> will be same as <file>.")
 	//script     = flag.String("e", "", "Transfer/execute a script from the local system to eachtarget system.")
@@ -52,6 +53,7 @@ var (
 	quiet      = flag.Bool("q", false, "quiet mode,disable header output.")
 	scriptTemp = flag.String("temp", "", "use template")
 	builtin    = flag.String("b", "", "built-in for template,when use temp")
+	formula    = flag.String("formula", "", "-formula <object><formula><value>.")
 
 	usage = `
   input control:
@@ -78,7 +80,7 @@ var (
     script <script file>        execute script file on remote host.
     cmd <config shortcmd>       use shortcmd in the pdo.conf.
     tail <file>                 mulit tail -f file .
-    md5sum <file>               get md5sum file and count md5.[not finished]
+    md5sum <file>               get md5sum file and count md5.
     help <subcommand>           get subcommand help.
     version                     get the pdo version.
     setup                       setup the configuration at the first time .[not finished]
@@ -119,10 +121,18 @@ type Pdo struct {
 	OutputDir     string
 	TemplateFile  string
 	YesOrNo       bool
+	Formula       string
+	FormulaDir    string
 	//	ScriptFile    string
 	//	CopyFile      string
-	Jobs  Job
-	Pause bool
+	Jobs         Job
+	Pause        bool
+	FormulaArray map[string]string
+}
+
+type FormulaResult struct {
+	Value string
+	File  string
 }
 
 type Job struct {
@@ -195,6 +205,7 @@ func NewPdo() *Pdo {
 		TimeWait:     *waitTime,
 		TimeInterval: *interTime,
 		YesOrNo:      *yesorno,
+		FormulaDir:   "/tmp/pdo/formula/" + PID,
 	}
 
 	//限制rd的账号
@@ -249,7 +260,9 @@ func NewPdo() *Pdo {
 		info.YesOrNo = true
 	case "md5sum":
 		subCommand = preCommand
-		tempCommand = flag.Args()[1]
+		info.OutputWay = "row"
+		tempCommand = "md5sum " + flag.Args()[1]
+		info.Formula = "1:diff"
 	case "script":
 		//脚本执行
 		subCommand = preCommand
@@ -311,7 +324,6 @@ func NewPdo() *Pdo {
 	}
 
 	//对jobList进行优化处理.
-
 	info.JobTotal = len(info.JobList)
 
 	log.Info(info.JobList)
@@ -364,9 +376,15 @@ func (pdo *Pdo) displayHead() {
 	checkErr(2, err)
 	os.Create(pdo.FailFile)
 
+	//clear forumla dir
+	os.RemoveAll(pdo.FormulaDir)
+	//create fomula dir
+	err = os.MkdirAll(pdo.FormulaDir, 0777)
+	checkErr(2, err)
+
 	//mkdir  output
 	if pdo.OutputDir != "" {
-		err := os.MkdirAll(pdo.OutputDir, 0755)
+		err := os.MkdirAll(pdo.OutputDir, 0777)
 		checkErr(2, err)
 	}
 
@@ -374,6 +392,23 @@ func (pdo *Pdo) displayHead() {
 
 //尾部信息显示
 func (pdo *Pdo) displayEnd() {
+
+	if pdo.Formula != "" {
+		fmt.Println("Formula: " + pdo.Formula)
+
+		for key, value := range pdo.FormulaArray {
+
+			tmpFile, err := os.Open(pdo.FormulaDir + "/" + key)
+			checkErr(1, err)
+			scanner := bufio.NewScanner(tmpFile)
+			num := 0
+			for scanner.Scan() {
+				num++
+			}
+
+			fmt.Println(key, num, value)
+		}
+	}
 
 }
 
@@ -456,17 +491,17 @@ func (pdo *Pdo) processResults(results <-chan Result) {
 			success++
 		case 2:
 			fmt.Printf("[%d/%d] %s \033[1;31m [Time Over KILLED]\033[0m.\n", jobnum, pdo.JobTotal, result.jobname)
-			CreateFailFile(pdo.FailFile, result.jobname)
+			CreateAppendFile(pdo.FailFile, result.jobname)
 			overtime++
 		case 3:
 			fmt.Printf("[%d/%d] %s \033[1;31m [KILLED FAILED]\033[0m.\n", jobnum, pdo.JobTotal, result.jobname)
-			CreateFailFile(pdo.FailFile, result.jobname)
+			CreateAppendFile(pdo.FailFile, result.jobname)
 			overtime++
 		default:
 			if pdo.OutputWay == "" && pdo.OutputDir == "" {
 				fmt.Printf("[%d/%d] %s \033[1;31m [FAILED]\033[0m.\n", jobnum, pdo.JobTotal, result.jobname)
 			}
-			CreateFailFile(pdo.FailFile, result.jobname)
+			CreateAppendFile(pdo.FailFile, result.jobname)
 			fail++
 		}
 		fmt.Println(result.resultinfo)
@@ -587,9 +622,9 @@ func CreateHostList(file *os.File) ([]HostList, error) {
 	return lists, err
 }
 
-//创建失败文件
-func CreateFailFile(failFile string, contents string) error {
-	file, err := os.OpenFile(failFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+//文件追加内容
+func CreateAppendFile(appendfile string, contents string) error {
+	file, err := os.OpenFile(appendfile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	defer file.Close()
 	checkErr(2, err)
 	file.WriteString(contents + "\n")
@@ -604,11 +639,37 @@ func (pdo *Pdo) sysSignalHandle() {
 		for sig := range c {
 			log.Warnf("Ctrl+c,recode fail list to "+pdo.FailFile+" ,signal:%s", sig)
 			for x := pdo.JobFinished - 1; x < pdo.JobTotal; x++ {
-				CreateFailFile(pdo.FailFile, pdo.JobList[x].Host+" "+pdo.JobList[x].Path)
+				CreateAppendFile(pdo.FailFile, pdo.JobList[x].Host+" "+pdo.JobList[x].Path)
 			}
 			os.Exit(0)
 		}
 	}()
+}
+
+//Formula 计算
+func (pdo *Pdo) funcFormula(content string, host string, path string) {
+	mula := strings.SplitN(pdo.Formula, ":", 3)
+	column, err := strconv.Atoi(mula[0])
+	checkErr(1, err)
+	lenmula := len(mula)
+	row := strings.Fields(content)
+	lenrow := len(row)
+
+	formula := make(map[string]string, 2)
+	switch mula[1] {
+	case "diff":
+		if lenmula == 2 && column <= lenrow && column > 0 {
+			recordFile := pdo.FormulaDir + "/" + row[0]
+			formula[row[0]] = recordFile
+			pdo.FormulaArray = formula
+			CreateAppendFile(recordFile, row[0]+" "+host+" "+path)
+		}
+	case "add":
+	case "gt":
+	case "eq":
+	default:
+	}
+
 }
 
 //具体job处理过程
@@ -618,7 +679,6 @@ func (pdo *Pdo) Do(job *Job) {
 	var out, outerr bytes.Buffer
 	var cmd *exec.Cmd
 
-	fmt.Println(pdo.SubCommand)
 	switch pdo.SubCommand {
 	case "copy":
 		//copy文件
@@ -632,7 +692,7 @@ func (pdo *Pdo) Do(job *Job) {
 	case "script":
 		//脚本执行 先copy 后 执行
 		cmdLine := strings.Split(pdo.CmdLastString, "<:::>")
-		remoteCmd := fmt.Sprintf("chmod +x %s && %s && cd /tmp/ && rm -f %s", cmdLine[1], cmdLine[1], cmdLine[1])
+		remoteCmd := fmt.Sprintf("chmod +x %s && %s || cd /tmp/ && rm -f %s", cmdLine[1], cmdLine[1], cmdLine[1])
 		copycmd := exec.Command("rsync", "-e", "ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3", "-a", cmdLine[0], job.jobname.Host+":"+cmdLine[1])
 		copycmd.Run()
 		cmd = exec.Command("ssh", "-xT", "-o", "PasswordAuthentication=no", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3", job.jobname.Host, "cd", job.jobname.Path, "&&", remoteCmd)
@@ -693,15 +753,25 @@ func (pdo *Pdo) Do(job *Job) {
 				} else {
 					fmt.Printf(">> \033[34m%-25s\033[0m >> %s\n", job.jobname.Host, scanner.Text())
 				}
+				if pdo.Formula != "" {
+					pdo.funcFormula(scanner.Text(), job.jobname.Host, job.jobname.Path)
+				}
 			}
 		} else {
 			for scanner.Scan() {
 				fmt.Printf(">> \033[34m%-25s\033[0m >> %s\n", job.jobname.Host, scanner.Text())
+				if pdo.Formula != "" {
+					pdo.funcFormula(scanner.Text(), job.jobname.Host, job.jobname.Path)
+				}
 			}
 		}
 		if err := scanner.Err(); err != nil {
 			checkErr(2, err)
 		}
+                scannerErr := bufio.NewScanner(stderr)
+                for scannerErr.Scan(){
+                    fmt.Printf(">> \033[34m%-25s\033[0m:FAIL>> %s\n", job.jobname.Host, scannerErr.Text())
+                }
 	} else {
 		//直接输出
 		go io.Copy(&out, stdout)
@@ -899,30 +969,39 @@ func ListAppMysql(conn string, appName string) ([]HostList, error) {
 			var orpId, hostname, containerId string
 			err = rows.Scan(&orpId, &hostname, &containerId)
 			checkErr(2, err)
-			if len(orpId) == 1 {
-				L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp00" + orpId
-				//L.Path = "/home/work/orp00" + orpId
-			} else {
-				L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp0" + orpId
-				//L.Path = "/home/work/orp0" + orpId
-			}
-
-			L.Host = hostname
-			//临时为新路径做过渡
-			tmpFile, err := os.Open("/home/rd/duanbing/pdo_orp")
-			checkErr(1, err)
-			scanner := bufio.NewScanner(tmpFile)
-
-			for scanner.Scan() {
-				words := strings.Fields(scanner.Text())
-				if len(words) == 2 {
-					if words[0] == L.Host && words[1] == containerId {
-						///home/matrix/containers/6.jx_pc_post_121/home/work/orp001
-						L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp"
-						break
-					}
+			if *grephost != "" {
+				if *grephost != hostname {
+					continue
 				}
 			}
+
+			L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp"
+
+			//if len(orpId) == 1 {
+			//	L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp00" + orpId
+			//	//L.Path = "/home/work/orp00" + orpId
+			//} else {
+			//	L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp0" + orpId
+			//	//L.Path = "/home/work/orp0" + orpId
+			//}
+
+			L.Host = hostname
+
+			//临时为新路径做过渡
+			//tmpFile, err := os.Open("/home/rd/duanbing/pdo_orp")
+			//checkErr(1, err)
+			//scanner := bufio.NewScanner(tmpFile)
+
+			//for scanner.Scan() {
+			//	words := strings.Fields(scanner.Text())
+			//	if len(words) == 2 {
+			//		if words[0] == L.Host && words[1] == containerId {
+			//			///home/matrix/containers/6.jx_pc_post_121/home/work/orp001
+			//			L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp"
+			//			break
+			//		}
+			//	}
+			//}
 			if FilterHosts(L.Host) && UniqHosts(Lists, L) {
 				Lists = append(Lists, L)
 			}
