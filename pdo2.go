@@ -3,32 +3,38 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"database/sql"
 	"flag"
 	"fmt"
 	"io"
-	//    "io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
-	//"sync"
 	"text/template"
-	//"math/rand"
-	"database/sql"
+	"time"
+
 	log "github.com/cihub/seelog"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/robfig/config"
-	"runtime"
-	"time"
 )
 
-const AppVersion = "Version 2.0.20140808"
+const AppVersion = "Version 2.0.20160202"
+
+// Version 2.0.20140821 增加print打印列表和prev提前显示的功能
+// Version 2.0.20141121 fix bugs: -y 第一个job会先执行完才继续 ; ssh 输出的warning ; -o 输出文件冲突的问题; -o 失败不显示状态.
+// Version 2.0.20151228 增加bns noahTree -b 的input
+// Version 2.0.20151231 增加指定User Name
+// Version 2.0.20160130 retry -R 优先及最高. setup完善.
+// Version 2.0.20160202 -bns -noah 增加多个的支持,中间用逗号分割.
 
 var (
 	SUDO_USER  = os.Getenv("SUDO_USER")
-	USERNAME   = os.Getenv("username")
+	USERNAME   = os.Getenv("USER")
 	HOME       = os.Getenv("HOME")
+	USERTMPDIR = "/tmp/pdo_" + USERNAME
 	PID        = strconv.Itoa(os.Getppid())
 	workers    = flag.Int("r", 1, "concurrent processing ,default 1 .")
 	waitTime   = flag.Duration("t", 300*time.Second, "over the time ,kill process.")
@@ -38,15 +44,14 @@ var (
 	outputShow = flag.String("show", "", "show option,you can use <row>")
 	product    = flag.String("p", "", "input product name.")
 	app        = flag.String("a", "", "input app name.")
+	user       = flag.String("u", USERNAME, "remote user name.")
+	bns        = flag.String("bns", "", "input bns service name.")
+	noah       = flag.String("noah", "", "input noah tree.")
 	mstring    = flag.String("match", "", "match a string with color.")
 	mrule      = flag.String("rule", "", "rule for match string in conf.")
 	grephost   = flag.String("host", "", "get the host list.")
-	//    argsConf   = flag.String("c", "", "args conf,save to file.")
-	//copy       = flag.String("c", "", "Copy <file> to destination as <dest_path>. If notspecified, <dest_path> will be same as <file>.")
-	//script     = flag.String("e", "", "Transfer/execute a script from the local system to eachtarget system.")
-	idc  = flag.String("i", "", "input filter idc name.")
-	idcs = flag.String("I", "", "filter JX or TC .")
-	//shortCmd   = flag.String("cmd", "", "short command in conf.")
+	idc        = flag.String("i", "", "input filter idc name.")
+	idcs       = flag.String("I", "", "filter JX or TC .")
 	configFile = flag.String("C", HOME+"/.pdo/pdo.conf", "configure file ,default /tmp/pdo_conf.$$.")
 	yesorno    = flag.Bool("y", false, "continue, yes/no , default false.")
 	retry      = flag.Bool("R", false, "retry fail list at the last time")
@@ -61,6 +66,8 @@ var (
     -a <orp appname>    from database.
     -p <orp product>    from database.
     -R                  from last failure list.
+    -bns <bns service>    from bns service, eg: pdo2 -bns redis.ksarch.all,memcache.ksarch.nj -r 10 "pwd"
+    -noah <noah tree path>    from noah tree path, eg: pdo2 -noah BAIDU_WAIMAI_WAIMAI -r 10 "pwd"
     default             from pipe,eg: cat file | pdo2
 
   output control:
@@ -82,25 +89,31 @@ var (
     tail <file>                 mulit tail -f file .
     md5sum <file>               get md5sum file and count md5.
     help <subcommand>           get subcommand help.
+    print                       print host list. hostname path.
     version                     get the pdo version.
     setup                       setup the configuration at the first time .[not finished]
     conf                        save the used args.[not finished]
 
+  other : 
+  	-u  <username>  	Specifies the remote user . 
+
   Examples:
-  ##simple ,read from pipe.
+  ## the first time , setup pdo conf pdo.conf and log.xml
+    pdo2 setup
+  ## simple ,read from pipe.
     cat list | pdo2 "pwd"
-  ##-a from orp , -r  concurrent processing
+  ## -a from orp , -r  concurrent processing
     pdo2 -a download-client -r 10 "pwd"
-  ##-show row ,show line by line
+  ## -show row ,show line by line
     pdo2 -p tieba -y -show row "pwd"
-  ##copy files
+  ## copy files
     pdo2 -a download-client copy 1.txt /tmp/
-  ##excute script files
+  ## excute script files
     pdo2 -a download-client script test.sh
   ## local command
     pdo2 -a download-client "scp a.txt {{.Host}}:{{.Path}}/log/"
-  ##more help
-    <http://tiebaop.baidu.com/docs/scripts/pdo/>
+  ## Specifies the user
+  	pdo2 -u root -a download-client -r 10 "pwd"
 `
 )
 
@@ -112,6 +125,7 @@ type Pdo struct {
 	CmdLastString string
 	PdoLocal      bool
 	FailFile      string
+	SuccessFile   string
 	MatchString   string
 	QuietOption   bool
 	OutputWay     string
@@ -123,11 +137,10 @@ type Pdo struct {
 	YesOrNo       bool
 	Formula       string
 	FormulaDir    string
-	//	ScriptFile    string
-	//	CopyFile      string
-	Jobs         Job
-	Pause        bool
-	FormulaArray map[string]string
+	Jobs          Job
+	Pause         bool
+	FormulaArray  map[string]string
+	User          string
 }
 
 type FormulaResult struct {
@@ -138,6 +151,7 @@ type FormulaResult struct {
 type Job struct {
 	jobname HostList
 	results chan<- Result
+	jobid   int
 }
 
 type Result struct {
@@ -198,14 +212,16 @@ func NewPdo() *Pdo {
 	info = &Pdo{
 		Concurrent:   *workers,
 		OutputDir:    *outputDir,
-		FailFile:     "/tmp/pdo_faile." + PID,
+		FailFile:     USERTMPDIR + "/faile." + PID,
+		SuccessFile:  USERTMPDIR + "/success." + PID,
 		MatchString:  *mstring,
 		OutputWay:    *outputShow,
 		QuietOption:  *quiet,
 		TimeWait:     *waitTime,
 		TimeInterval: *interTime,
 		YesOrNo:      *yesorno,
-		FormulaDir:   "/tmp/pdo/formula/" + PID,
+		FormulaDir:   USERTMPDIR + "/formula_" + PID,
+		User:         *user,
 	}
 
 	//限制rd的账号
@@ -218,6 +234,11 @@ func NewPdo() *Pdo {
 	//PdoLocal      : templateTrue,
 	//CmdLastString : tempCommand ,
 
+	if *user == "root" {
+		HOME = "/root"
+	} else {
+		HOME = "/home/" + *user
+	}
 	//subcommand处理
 	var preCommand, tempCommand, subCommand string
 	if len(flag.Args()) > 0 {
@@ -236,8 +257,8 @@ func NewPdo() *Pdo {
 	case "setup":
 		//第一次创建.
 		if pdoSetup() {
-			fmt.Println("SETUP SUCCESS.")
-			fmt.Println("Please Check the ~/.pdo/pdo.conf and copy the bin to $PATH ...")
+			fmt.Println("[INFO] SETUP SUCCESS.")
+			fmt.Println("       You can change the  conf ~/.pdo/pdo.conf and Please copy the pdo2 bin to $PATH .")
 			os.Exit(0)
 		} else {
 			fmt.Println("SETUP FAIL.")
@@ -267,6 +288,12 @@ func NewPdo() *Pdo {
 		//脚本执行
 		subCommand = preCommand
 		tempCommand = flag.Args()[1] + "<:::>" + "/tmp/pdo_script." + PID
+	case "print":
+		//打印机器列表
+		subCommand = "print"
+		tempCommand = "print"
+		info.YesOrNo = true
+		info.QuietOption = true
 	default:
 		//默认执行.
 		subCommand = "bash"
@@ -307,7 +334,11 @@ func NewPdo() *Pdo {
 		checkErr(1, err)
 	}
 	//input判断
-	if *product != "" {
+	if *retry {
+		sourceFile, err := os.Open(info.FailFile)
+		checkErr(1, err)
+		info.JobList, _ = CreateHostList(sourceFile)
+	} else if *product != "" {
 		info.JobList, _ = ListProductMysql(conn, *product)
 	} else if *app != "" {
 		info.JobList, _ = ListAppMysql(conn, *app)
@@ -315,10 +346,18 @@ func NewPdo() *Pdo {
 		sourceFile, err := os.Open(*hostFile)
 		checkErr(1, err)
 		info.JobList, _ = CreateHostList(sourceFile)
-	} else if *retry {
-		sourceFile, err := os.Open(info.FailFile)
+	} else if *bns != "" {
+		info.JobList, err = CreateBnsServiceHost(*bns)
 		checkErr(1, err)
-		info.JobList, _ = CreateHostList(sourceFile)
+		if err != nil {
+			os.Exit(2)
+		}
+	} else if *noah != "" {
+		info.JobList, err = CreateNoahTreeHost(*noah)
+		checkErr(1, err)
+		if err != nil {
+			os.Exit(2)
+		}
 	} else {
 		info.JobList, _ = CreateHostList(os.Stdin)
 	}
@@ -362,8 +401,15 @@ func (pdo *Pdo) displayHead() {
 			fmt.Println("#---CMD---#  Script:", cmdLine[0])
 		default:
 			fmt.Println("#---CMD---# ", pdo.CmdLastString)
-
 		}
+	}
+
+	if pdo.SubCommand == "print" {
+		for _, v := range pdo.JobList {
+			fmt.Println(v.Host, v.Path)
+		}
+		os.Exit(0)
+
 	}
 
 	if pdo.JobTotal == 0 {
@@ -372,16 +418,18 @@ func (pdo *Pdo) displayHead() {
 	}
 
 	//create fail list
-	err := os.MkdirAll("/tmp/pdo", 0777)
+	err := os.MkdirAll(USERTMPDIR, 0777)
 	checkErr(2, err)
 	os.Create(pdo.FailFile)
+	os.Create(pdo.SuccessFile)
 
 	//clear forumla dir
-	os.RemoveAll(pdo.FormulaDir)
-	//create fomula dir
-	err = os.MkdirAll(pdo.FormulaDir, 0777)
-	checkErr(2, err)
-
+	if pdo.Formula != "" {
+		os.RemoveAll(pdo.FormulaDir)
+		//create fomula dir
+		err = os.MkdirAll(pdo.FormulaDir, 0777)
+		checkErr(2, err)
+	}
 	//mkdir  output
 	if pdo.OutputDir != "" {
 		err := os.MkdirAll(pdo.OutputDir, 0777)
@@ -437,15 +485,18 @@ func (pdo *Pdo) doRequest() {
 //添加job
 func (pdo *Pdo) addJob(jobs chan<- Job, jobnames []HostList, results chan<- Result) {
 	for num, jobname := range jobnames {
-		jobs <- Job{jobname, results}
+		jobs <- Job{jobname, results, num + 1}
 		//第一个任务暂停
 		if !pdo.QuietOption && num == 0 {
 			for {
+				if pdo.YesOrNo {
+					break
+				}
 				if pdo.Pause {
 					YesNO(pdo.YesOrNo)
 					break
 				} else {
-					time.Sleep(10 * time.Millisecond)
+					time.Sleep(20 * time.Millisecond)
 				}
 			}
 		}
@@ -485,9 +536,10 @@ func (pdo *Pdo) processResults(results <-chan Result) {
 	for result := range results {
 		switch result.resultcode {
 		case 0:
-			if pdo.OutputWay == "" {
+			if pdo.OutputWay != "row" {
 				fmt.Printf("[%d/%d] %s \033[34m [SUCCESS]\033[0m.\n", jobnum, pdo.JobTotal, result.jobname)
 			}
+			CreateAppendFile(pdo.SuccessFile, result.jobname)
 			success++
 		case 2:
 			fmt.Printf("[%d/%d] %s \033[1;31m [Time Over KILLED]\033[0m.\n", jobnum, pdo.JobTotal, result.jobname)
@@ -498,7 +550,7 @@ func (pdo *Pdo) processResults(results <-chan Result) {
 			CreateAppendFile(pdo.FailFile, result.jobname)
 			overtime++
 		default:
-			if pdo.OutputWay == "" && pdo.OutputDir == "" {
+			if pdo.OutputWay != "row" {
 				fmt.Printf("[%d/%d] %s \033[1;31m [FAILED]\033[0m.\n", jobnum, pdo.JobTotal, result.jobname)
 			}
 			CreateAppendFile(pdo.FailFile, result.jobname)
@@ -595,8 +647,92 @@ func YesNO(choose bool) {
 	}
 }
 
+//创建bns service input来源
+func CreateBnsServiceHost(bns string) (lists []HostList, err error) {
+
+	bnsName := strings.Split(bns, ",")
+
+	var list HostList
+	//var lists []HostList
+
+	for _, v := range bnsName {
+		cmd := exec.Command("get_instance_by_service", v)
+		//命令执行
+		stdout, err := cmd.StdoutPipe()
+		checkErr(2, err)
+		stderr, err := cmd.StderrPipe()
+		checkErr(2, err)
+		err = cmd.Start()
+		checkErr(2, err)
+
+		go io.Copy(os.Stderr, stderr)
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			words := strings.Fields(scanner.Text())
+			if len(words) >= 1 {
+				if len(words) < 2 {
+					list.Host = words[0]
+					list.Path = HOME
+				} else {
+					list.Host = words[0]
+					list.Path = words[1]
+				}
+				if FilterHosts(list.Host) && UniqHosts(lists, list) {
+					lists = append(lists, list)
+				}
+			}
+		}
+		err = scanner.Err()
+		checkErr(2, err)
+	}
+	return lists, err
+}
+
+//创建bns service input来源
+func CreateNoahTreeHost(noah string) (lists []HostList, err error) {
+
+	noahPath := strings.Split(noah, ",")
+
+	var list HostList
+	//var lists []HostList
+
+	for _, v := range noahPath {
+		cmd := exec.Command("get_hosts_by_path", v)
+		//命令执行
+		stdout, err := cmd.StdoutPipe()
+		checkErr(2, err)
+		stderr, err := cmd.StderrPipe()
+		checkErr(2, err)
+		err = cmd.Start()
+		checkErr(2, err)
+
+		go io.Copy(os.Stderr, stderr)
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			words := strings.Fields(scanner.Text())
+			if len(words) >= 1 {
+				if len(words) < 2 {
+					list.Host = words[0]
+					list.Path = HOME
+				} else {
+					list.Host = words[0]
+					list.Path = words[1]
+				}
+				if FilterHosts(list.Host) && UniqHosts(lists, list) {
+					lists = append(lists, list)
+				}
+			}
+		}
+		err = scanner.Err()
+		checkErr(2, err)
+	}
+	return lists, err
+}
+
 //创建host列表  Input来源 文件或者管道
-func CreateHostList(file *os.File) ([]HostList, error) {
+func CreateHostList(file io.Reader) ([]HostList, error) {
 	var list HostList
 	var lists []HostList
 
@@ -646,32 +782,6 @@ func (pdo *Pdo) sysSignalHandle() {
 	}()
 }
 
-//Formula 计算
-func (pdo *Pdo) funcFormula(content string, host string, path string) {
-	mula := strings.SplitN(pdo.Formula, ":", 3)
-	column, err := strconv.Atoi(mula[0])
-	checkErr(1, err)
-	lenmula := len(mula)
-	row := strings.Fields(content)
-	lenrow := len(row)
-
-	formula := make(map[string]string, 2)
-	switch mula[1] {
-	case "diff":
-		if lenmula == 2 && column <= lenrow && column > 0 {
-			recordFile := pdo.FormulaDir + "/" + row[0]
-			formula[row[0]] = recordFile
-			pdo.FormulaArray = formula
-			CreateAppendFile(recordFile, row[0]+" "+host+" "+path)
-		}
-	case "add":
-	case "gt":
-	case "eq":
-	default:
-	}
-
-}
-
 //具体job处理过程
 func (pdo *Pdo) Do(job *Job) {
 
@@ -685,17 +795,17 @@ func (pdo *Pdo) Do(job *Job) {
 		cmdLine := strings.Split(pdo.CmdLastString, "<:::>")
 		ch := cmdLine[1][0]
 		if string(ch) == "/" {
-			cmd = exec.Command("rsync", "-e", "ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3", "-a", cmdLine[0], job.jobname.Host+":"+cmdLine[1])
+			cmd = exec.Command("rsync", "-e", "ssh -q -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3", "-a", cmdLine[0], pdo.User+"@"+job.jobname.Host+":"+cmdLine[1])
 		} else {
-			cmd = exec.Command("rsync", "-e", "ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3", "-a", cmdLine[0], job.jobname.Host+":"+job.jobname.Path+"/"+cmdLine[1])
+			cmd = exec.Command("rsync", "-e", "ssh -q -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3", "-a", cmdLine[0], pdo.User+"@"+job.jobname.Host+":"+job.jobname.Path+"/"+cmdLine[1])
 		}
 	case "script":
 		//脚本执行 先copy 后 执行
 		cmdLine := strings.Split(pdo.CmdLastString, "<:::>")
 		remoteCmd := fmt.Sprintf("chmod +x %s && %s || cd /tmp/ && rm -f %s", cmdLine[1], cmdLine[1], cmdLine[1])
-		copycmd := exec.Command("rsync", "-e", "ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3", "-a", cmdLine[0], job.jobname.Host+":"+cmdLine[1])
+		copycmd := exec.Command("rsync", "-e", "ssh -q -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3", "-a", cmdLine[0], pdo.User+"@"+job.jobname.Host+":"+cmdLine[1])
 		copycmd.Run()
-		cmd = exec.Command("ssh", "-xT", "-o", "PasswordAuthentication=no", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3", job.jobname.Host, "cd", job.jobname.Path, "&&", remoteCmd)
+		cmd = exec.Command("ssh", "-q", "-xT", "-o", "PasswordAuthentication=no", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3", pdo.User+"@"+job.jobname.Host, "cd", job.jobname.Path, "&&", remoteCmd)
 	default:
 		//默认是命令行执行
 		//本地脚本执行与远程执行
@@ -710,8 +820,7 @@ func (pdo *Pdo) Do(job *Job) {
 			cmd = exec.Command("/bin/bash", "-s")
 			cmd.Stdin = bytes.NewBufferString(outputString)
 		} else {
-			cmd = exec.Command("ssh", "-xT", "-o", "PasswordAuthentication=no", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3", job.jobname.Host, "cd", job.jobname.Path, "&&", pdo.CmdLastString)
-			//cmd:=exec.Command("ssh", "-xT", "-o", "PasswordAuthentication=no", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3", "job.jobname.Host","sh -s")
+			cmd = exec.Command("ssh", "-q", "-xT", "-o", "PasswordAuthentication=no", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3", pdo.User+"@"+job.jobname.Host, "cd", job.jobname.Path, "&&", pdo.CmdLastString)
 		}
 	}
 
@@ -726,18 +835,9 @@ func (pdo *Pdo) Do(job *Job) {
 	//执行过程内容
 	//输出存储到文件
 	if pdo.OutputDir != "" {
-		//写重复host时候
-		i := 1
+		//写重复host时候 并发有时间的先后顺序问题. 所以暂时使用array jobid进行记录.保证不会冲突
 		outFile := fmt.Sprintf("%s/%s", pdo.OutputDir, job.jobname.Host)
-		writeFile := outFile
-		for {
-			if checkExist(writeFile) {
-				writeFile = outFile + "_" + strconv.Itoa(i)
-			} else {
-				break
-			}
-			i++
-		}
+		writeFile := outFile + "_" + strconv.Itoa(job.jobid)
 		outf, err := os.Create(writeFile)
 		defer outf.Close()
 		checkErr(2, err)
@@ -768,10 +868,10 @@ func (pdo *Pdo) Do(job *Job) {
 		if err := scanner.Err(); err != nil {
 			checkErr(2, err)
 		}
-                scannerErr := bufio.NewScanner(stderr)
-                for scannerErr.Scan(){
-                    fmt.Printf(">> \033[34m%-25s\033[0m:FAIL>> %s\n", job.jobname.Host, scannerErr.Text())
-                }
+		scannerErr := bufio.NewScanner(stderr)
+		for scannerErr.Scan() {
+			fmt.Printf(">> \033[34m%-25s\033[0m:FAIL>> %s\n", job.jobname.Host, scannerErr.Text())
+		}
 	} else {
 		//直接输出
 		go io.Copy(&out, stdout)
@@ -803,12 +903,13 @@ func (pdo *Pdo) Do(job *Job) {
 			job.results <- Result{jobstring, 1, outerr.String()}
 		} else {
 			//完成返回成功
-			if pdo.OutputWay == "" {
+			if pdo.OutputWay != "row" {
 				//如果是行显示就隐藏
 				job.results <- Result{jobstring, 0, out.String()}
 			}
 		}
 	}
+
 	//判断如果是第一个job就暂停
 	if pdo.JobFinished == 1 {
 		pdo.Pause = true
@@ -833,13 +934,6 @@ func pdoSetup() bool {
 [PDO]
 logconf:{{.}}/.pdo/log.xml
 scripts:bash,python,ruby,perl,php
-
-[DB]
-Host:10.92.74.42
-Port:5100
-DBname:orp
-User:orp_beiku
-Pass:Ju38Jdfwluew
 
 [IDC]
 JX:yf01,cq01,dbl01,ai01,jx,cp01
@@ -875,7 +969,7 @@ example : find -type d | wc -l
 `
 
 	if !checkExist(conffile) {
-		fmt.Println(conffile + " not exist.")
+		//fmt.Println(conffile + " not exist.")
 		openconffile, err := os.OpenFile(conffile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 		defer openconffile.Close()
 		conftmpl, err := template.New("pdoconf").Parse(pdoconf)
@@ -885,7 +979,7 @@ example : find -type d | wc -l
 
 	}
 	if !checkExist(logfile) {
-		fmt.Println(logfile + " not exist.")
+		//fmt.Println(logfile + " not exist.")
 		openlogfile, err := os.OpenFile(logfile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 		defer openlogfile.Close()
 		logtmpl, err := template.New("logconf").Parse(logconf)
@@ -927,13 +1021,21 @@ func ListProductMysql(conn string, proName string) ([]HostList, error) {
 	err = stmtProductName.QueryRow(proName).Scan(&proId)
 	checkErr(2, err)
 
+	//先拿到prev的列表
+	preApp, _ := ListAppMysql(conn, proName+"-prev")
+	for _, vpre := range preApp {
+		Lists = append(Lists, vpre)
+	}
+
 	rows, err := stmtProductId.Query(proId)
 	for rows.Next() {
 		err = rows.Scan(&app, &appId)
 		checkErr(2, err)
-		arrApp, _ := ListAppMysql(conn, app)
-		for _, va := range arrApp {
-			Lists = append(Lists, va)
+		if app != proName+"-prev" {
+			arrApp, _ := ListAppMysql(conn, app)
+			for _, va := range arrApp {
+				Lists = append(Lists, va)
+			}
 		}
 	}
 
@@ -977,35 +1079,38 @@ func ListAppMysql(conn string, appName string) ([]HostList, error) {
 
 			L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp"
 
-			//if len(orpId) == 1 {
-			//	L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp00" + orpId
-			//	//L.Path = "/home/work/orp00" + orpId
-			//} else {
-			//	L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp0" + orpId
-			//	//L.Path = "/home/work/orp0" + orpId
-			//}
-
 			L.Host = hostname
 
-			//临时为新路径做过渡
-			//tmpFile, err := os.Open("/home/rd/duanbing/pdo_orp")
-			//checkErr(1, err)
-			//scanner := bufio.NewScanner(tmpFile)
-
-			//for scanner.Scan() {
-			//	words := strings.Fields(scanner.Text())
-			//	if len(words) == 2 {
-			//		if words[0] == L.Host && words[1] == containerId {
-			//			///home/matrix/containers/6.jx_pc_post_121/home/work/orp001
-			//			L.Path = "/home/matrix/containers/" + containerId + "/home/work/orp"
-			//			break
-			//		}
-			//	}
-			//}
 			if FilterHosts(L.Host) && UniqHosts(Lists, L) {
 				Lists = append(Lists, L)
 			}
 		}
 	}
 	return Lists, err
+}
+
+//Formula 计算
+func (pdo *Pdo) funcFormula(content string, host string, path string) {
+	mula := strings.SplitN(pdo.Formula, ":", 3)
+	column, err := strconv.Atoi(mula[0])
+	checkErr(1, err)
+	lenmula := len(mula)
+	row := strings.Fields(content)
+	lenrow := len(row)
+
+	formula := make(map[string]string, 2)
+	switch mula[1] {
+	case "diff":
+		if lenmula == 2 && column <= lenrow && column > 0 {
+			recordFile := pdo.FormulaDir + "/" + row[0]
+			formula[row[0]] = recordFile
+			pdo.FormulaArray = formula
+			CreateAppendFile(recordFile, row[0]+" "+host+" "+path)
+		}
+	case "add":
+	case "gt":
+	case "eq":
+	default:
+	}
+
 }
