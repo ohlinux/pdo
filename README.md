@@ -1,8 +1,27 @@
+批量执行工具PDO,主要是解决减少批量执行的繁锁,更安全便捷的操作命令,尤其是解决ORP的目录依赖的问题.
 
-批量执行工具PDO,主要是解决批量执行的繁锁,更安全便捷的操作工具.
-本身是解决公司内部的一些问题,并且有很多特定环境的一些使用,现在抽离出其中都可以使用的部分.
+* 工具名称: pdo(parallel do something) 
 
-* 工具名称: pdo(parallel do something)
+         work@yf-orp-apollo.yf01:router$ which pdo
+         /usr/local/otools/bin/pdo
+         work@yf-orp-apollo.yf01:router$ which pdo2
+         /usr/local/otools/bin/pdo2
+
+* pdo V1 因为还有些地方在使用所以,将version 1的文档链接起来. [pdov1.md](pdov1.md)
+* pdo V2 是最新的工具,取消了原来依赖ofind的方式,以下主要是介绍pdo2这个工具.
+* pdo V2 优化了输出,可以时时写入,可以超时中断,区分屏幕输出与文件写入,屏幕输出为一次性输出,文件写入为时时写入.
+* pdo V2 优化了并发输出,可以让并发速度更快,并且加入了很多其它复杂的功能.
+
+* 更新历史
+
+	```
+// Version 2.0.20140821 增加print打印列表和prev提前显示的功能
+// Version 2.0.20141121 fix bugs: -y 第一个job会先执行完才继续 ; ssh 输出的warning ; -o 输出文件冲突的问题; -o 失败不显示状态.
+// Version 2.0.20151228 增加bns noahTree -b 的input
+// Version 2.0.20151231 增加指定User Name
+// Version 2.0.20160130 retry -R 优先及最高. setup完善.
+// Version 2.0.20160202 -bns -noah 增加多个的支持,中间用逗号分割.
+```
 
 ## 安装
 
@@ -10,517 +29,419 @@
 
 1. 需要有一个中控机与被管理机器建立了无密码的密钥关系.
 2. 需要有go语言的环境,进行编译安装.这里没有提供bin文件.
-3. 自己所测试的环境有,centos macos.
+3. 自己所测试的环境有,centos,Redhat,osx.
 
 ### 编译
 
 先获取依赖的第三方库: 
 
+	```
     go get github.com/cihub/seelog
     go get github.com/robfig/config
+    ```
 
 安装go 环境.
 
-    go build pdo.go
+    ```
+    go build pdo2.go
+    ```
+    
+### 配置
+ 
+ 第一次创建配置文件,会创建~/.pdo/pdo.conf ~/.pdo/log.xml 两个文件. 可以进行定制.
+ 
+ ```
+ pdo2 setup 
+ ```  
+    
+###  Pdo Help 
 
-配置文件目录,默认在~/.pdo.如果不在此处指定.
+```
+Usage: pdo2 [input control][thread control] [output control][subcommand] <content>
+
+  input control:
+    -f <file>           from File "HOST PATH".
+    -a <orp appname>    from database.
+    -p <orp product>    from database.
+    -R                  from last failure list.
+    -bns <bns service>    from bns service, eg: pdo2 -bns redis.ksarch.all -r 10 "pwd"
+    -noah <noah tree path>    from noah tree path, eg: pdo2 -noah BAIDU_WAIMAI_WAIMAI -r 10 "pwd"
+    default             from pipe,eg: cat file | pdo2
+
+  output control:
+    default             display after finish.
+    -show <row>         display line by line.
+    -o <dir>            save to directory.
+
+  thread control:
+    -r <int>            concurrent processing ,default 1.
+    -t <10s>            over the time ,kill process.
+    -T <1m>             Interval time between concurrent programs.
+    -y                  default need input y .
+    -q                  quiet mode , not display the head infomation.
+
+  subcommand :
+    copy <file> <destination>   copy file to remote host.
+    script <script file>        execute script file on remote host.
+    cmd <config shortcmd>       use shortcmd in the pdo.conf.
+    tail <file>                 mulit tail -f file .
+    md5sum <file>               get md5sum file and count md5.
+    help <subcommand>           get subcommand help.
+    print                       print host list. hostname path.
+    version                     get the pdo version.
+    setup                       setup the configuration at the first time .[not finished]
+    conf                        save the used args.[not finished]
+
+  Examples:
+  ##simple ,read from pipe.
+    cat list | pdo2 "pwd"
+  ##-a from orp , -r  concurrent processing
+    pdo2 -a download-client -r 10 "pwd"
+  ##-show row ,show line by line
+    pdo2 -p tieba -y -show row "pwd"
+  ##copy files
+    pdo2 -a download-client copy 1.txt /tmp/
+  ##excute script files
+    pdo2 -a download-client script test.sh
+  ## local command
+    pdo2 -a download-client "scp a.txt {{.Host}}:{{.Path}}/log/"
+```
 
 ## pdo 结构
 
-### pdo 处理对象来源
+``` 
+Usage: pdo2 [input control][thread control] [output control][subcommand] <content>
+ ```
 
-获取机器列表和相对应的路径有三种途径.(这里去掉了数据库这种特定的)
+分为四部分:
+
+* input control 输入来源及控制,主要是不同的列表输入方式与控制 .
+* thread control 并发线程控制
+* output contorl 不同的输出方式
+* [subcommand] <content> 命令部分 可以使用subcommand 二级命令 也可以直接使用命令 直接使用命令使用引号括起来.
+
+**注意点: 所有的控制参数需要在二级命令之前,如果在命令之后,将失去作用.**
+
+[pdo图](http://gitlab.baidu.com/zhangjian12/pdo/blob/master/PDO%E5%B7%A5%E5%85%B7.png)
+
+##  input control 输入
+
+获取机器列表和相对应的路径有三种途径.
 
 1. -f 文件,host的列表文件,可以是一列,也可以是两列有相关的目录依赖.后面有例子.
-2. -a app名字;-p 产品名;-a支持多app采用 app1,app2逗号分隔. (这个是数据库的来源,因为是特定环境的所以不再有)
+2. -a app名字;-p 产品名;-a支持多app采用 app1,app2逗号分隔.
 3. 标准输入 cat 1.host | pdo
-4. -R当使用的时候,可以自动生成失败的列表.详细查看例子"Retry功能"
+4. -R当使用的时候,使用的是上次失败的列表.详细查看例子"Retry功能"
 
-### pdo 列表过滤
+###  输入列表过滤
 
-如果列表名称是这样的结构,xxx.yyy 那么过滤的就是yyy,如果没有这个需要,可以忽略.
-
-1. -i yf01,dbl01,cq02 过滤物理机房名称,多个可用逗号隔开.
-2. -I JX/TC  过滤逻辑机房,配置在-c configure file 中
+1. -i yf01,dbl01,cq02 过滤机房名称,多个可用逗号隔开.(过滤是说去除)
+2. -I JX/TC  过滤逻辑机房,配置在~/.pdo/pdo.conf 中(自定义都可以)
+3. --host= 指定host访问 主要适用ORP 一台物理机器上多个相同app的容器场景,只能配合-a/-p使用.
 
 配置文件中: 
 
+```
         [IDC]
         JX:yf01,cq01,dbl01,ai01
         TC:cq02,tc,m1,db01
+```
 
-### 日志记录
+## output control 输出控制
 
-日志主要记录使用者,使用过的命令,保证多人操作的时候可以查看到.
+输出方式有三种:
 
-日志配置文件查看github.com/cihub/seelog
-主配置文件格式查看github.com/robfig/config
+* 默认是事后输出,只有等远程目标机器执行完所有的请求才会输出标准输出.
+* -o <dir> 是将标准输出保存为按host的文件,如果目录下面存在相同的host 会在原来的基础上加1 如: cq02-orp-app001.cq02_1
+* -show <row>  按行输出,将标准输出添加上host标签 按行进行输出. 
+* -show <row> -match <string> 按行输出可以-match 字符串,高亮显示 .
+
+## thread control 线程控制 
+
+线程控制主要是pdo进程及线程并发度,超时相关的控制 .
+
+*    -r <int>       线程并发度控制,默认是1, rd有最大上限.
+*    -t <10s>      超时控制,如果超时将会有killed over time的提示.输入时间带单位,如10s(10秒),5m(5分) ,1h(1小时)
+*    -T <1m>        间隔控制,主要是线程之间或者并发度之间的时间控制,有点类似在命令里面输入sleep ,区别就是 使用-T 输出是立即输出的屏幕,使用sleep 是sleep之后返回的.
+*   -y                不使用-y,默认是需要进行命令和单机确认.
+*   -q                主要是quiet模式,不显示头部信息.
+    
+
+## subcommand : 子命令
+
+二级子命令,主要是封装了很多功能,可以简单直接的使用. 
+
+```    
+*  copy <file> <destination>   复制文件 可以文件也可以是目录.支持相对和绝对路径.
+*  script <script file>         将本地的一个脚本,在远程执行.
+*  cmd <config shortcmd>       短命令,主要是用于常用复杂命令,可以将短命令配置在pdo.conf中.
+*  tail <file>                 相当于mulit tail -f file . 会在一个屏幕同时输出多个终端的内容,建议不要对大日志文件里面操作.
+*  md5sum <file>              查看某个文件的md5值,并且进行统计.
+*  help <subcommand>           get subcommand help. 子命令help 暂时还无.
+*  version                     get the pdo version.
+*  setup                       setup the configuration at the first time .[not finished]
+*  conf                        save the used args.[not finished]
+```
         
-### pdo 功能
-
-会有主机和命令和单台执行确认.
-
-* -r 并发量,默认为1.
-* -C configure , 配置文件,默认为~/.pdo/pdo.conf
-* -o dir , 输出目录,默认为空,会打印在屏幕,如果添加则只会打印到文件中.
-* -cmd 命令, 命令缩写,在配置文件中.
-* -t 超时结束,超时时间默认5min.
-* -y 不用输入确认.
-* -c copy file/dir ,复制文件/或者目录,要求远端的目录必需存在.
-* -e script 执行脚本.
-* -T 执行间隔时间,默认为0,比命令中加sleep效果好,不会耽误输出.
-* -R retry ,失败之后retry功能,会记录上次失败的列表和ctrl+c未执行的列表.
-* -temp template模板名字,在配置中.
-* -b build-in 在使用template的模板时候可以嵌入脚本.
-* -V 查看version 
-* -show 查看显示方式"row" 行显示方式<row>.
-* -match 在行显示的时候可以进行match字符串.高亮红色显示.
-* -rule 在行显示的模式下,可以使用conf中的rule,来定义不同match的字符串的动作.(暂时无)
-
-### pdo 未完成功能
-
-* 去重与多实例,产品线重启并发优化.
-* web页面展示功能.
-
-### 注意事项
-
-* 操作的命令,被引号括起来的,一定要保持在命令最后.
-
-## pdo使用用举例
+## pdo应用举例
 
 ### 配置文件
 
+```
      [PDO]
-     logconf:/home/work/.pdo/log.xml
-     
-     [IDC]
-     JX:yf01,cq01,dbl01,ai01,jx,cp01
-     TC:cq02,tc,m1,db01,st01
-     
-     [TEMPLATE]
-     container : /home/work/.pdo/template/container.sh
-     startbykill : /home/work/.pdo/template/startbykill.sh
-     
-     [CMD]
-     restart: bash bin/xxxControl.sh N%%N%%N%%restart
-     findLog: find xxx00* -name "debug" -type d
-     findCount: ls log | wc -l
+     Log:/home/work/.pdo/log/pdo.log  //日志配置
+
+     [Mysql] //数据库配置
+     Host:st01-orp-con00.st01
+     Port:3306
+     DBname:orp
+     User:rd
+     Pass:MhxzKhl
+ 
+     [IDC] //过滤物理idc/或者机器名后缀
+     JX:yf01,cq01,dbl01,ai01
+     TC:cq02,tc,m1,db01
+ 
+     [CMD] //短命令
+     restart: bash bin/orpControl.sh N%%N%%N%%restart
+```
 
 ### host列表文件
 
-第一列一定是host,hostname或者ip都可以,第二列可选是命令工作的路径.
+机器列表主要是两列,第一列必需有为host,第二列如果存在必需是路径 可以是相对和绝对路径.
 
-    cat godir/1.list
-    yf-xxx-app01.yf01 /home/work/xxx001
-    yf-xxx-app02.yf01 /home/work/xxx004
-    yf-xxx-app03.yf01 /home/work/xxx002
+```
+    cat godir/1.list  
+    yf-orp-pre01.vm /home/work/orp001
+    yf-orp-app01.yf01 /home/work/orp001
+    yf-orp-app02.yf01 /home/work/orp001
+```
 
 ### 使用管道方式
 
-    cat 1.list | pdo -r 2 "pwd"
-    >>>> Welcome ajian...
-    yf-xxx-pre01.vm          -/home/work/xxx001    yf-xxx-app01.yf01        -/home/work/xxx001
-    yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/xxx001
-    yf-xxx-app04.yf01        -/home/work/xxx001    1-xxx-app17.m1           -/home/work/xxx001
-    m1-xxx-app25.m1          -/home/work/xxx001    m1-xxx-app0220.m1        -/home/work/xxx001
-    m1-xxx-app0154.m1        -/home/work/xxx004    cq01-xxx-app0242.cq01    -/home/work/xxx003
-    ai-xxx-app01.ai01        -/home/work/xxx004    db-xxx-app17.db01        -/home/work/xxx003
-    db-xxx-app63.db01        -/home/work/xxx001
-
-    #--Total--#  13
-    #---CMD---#  pwd
-    //每一次确认
-    Continue (y/n):y
-    go on ...
-    [1/13] yf-xxx-app01.yf01  [SUCCESS].
-    /home/work/xxx001
+```
+    cat godir/1.list | pdo2 -r 2 "pwd"
+    >>>> Welcome zhangjian12...
+    yf-orp-pre01.vm          -/home/work/orp001    yf-orp-app01.yf01        -/home/work/orp001
+    yf-orp-app02.yf01        -/home/work/orp001    yf-orp-app03.yf01        -/home/work/
+```
     
-    Continue (y/n):[1/13] yf-xxx-pre01.vm  [SUCCESS].
-    /home/work/xxx001
-    //单台执行完 第二次确认 
+### 使用app方式与简写命令
+
+使用数据库app方式,以orptest app为例,cmd为缩写命令= bash bin/orpControl.sh N%%N%%N%%restart
+
+```
+    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest cmd restart
+    >>>> Welcome zhangjian12...
+    yf-orp-app01.yf01        -/home/work/orp001    yf-orp-app02.yf01        -/home/work/orp001
+    #--Total--#  2
+    #---CMD---#  bash bin/orpControl.sh N%%N%%N%%restart
     Continue (y/n):
-    //后面就是按2并发执行.
+```
     
-### 使用简写命令
+### 使用idc过滤
 
-这个主要是解决一些重复执行的繁锁的单行命令.看下面的一个重启命令很是麻烦,但通过转换之后就输入很方便了.
-
--cmd为缩写命令= bash bin/xxxControl.sh N%%N%%N%%restart
-
-    $ pdo -f 1.list  -cmd restart
-    >>>> Welcome ajian...
-    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
-    yf-xxx-app03.yf01        -/home/work/xxx001    yf-xxx-app04.yf01        -/home/work/xxx001
-    yf-xxx-app00.yf01        -/home/work/xxx001    yf-xxx-app0148.yf01      -/home/work/xxx004
-    dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app17.m1          -/home/work/xxx001
-    m1-xxx-app25.m1          -/home/work/xxx001    m1-xxx-app0220.m1        -/home/work/xxx001
-    m1-xxx-app0154.m1        -/home/work/xxx004    cq01-xxx-app0242.cq01    -/home/work/xxx003
-    cq01-xxx-app0179.cq01    -/home/work/xxx001    cq01-xxx-app0131.cq01    -/home/work/xxx005
-    st01-xxx-app03.st01      -/home/work/xxx001    st01-xxx-app04.st01      -/home/work/xxx001
-    st01-xxx-app02.st01      -/home/work/xxx001    st01-xxx-app00.st01      -/home/work/xxx001
-    st01-xxx-app05.st01      -/home/work/xxx001    cq02-xxx-app0258.cq02    -/home/work/xxx001
-    cq02-xxx-app0287.cq02    -/home/work/xxx001    jx-xxx-app17.jx          -/home/work/xxx001
-    ai-xxx-app10.ai01        -/home/work/xxx001    db-xxx-app17.db01        -/home/work/xxx003
-
-
-    #--Total--#  24
-    #---CMD---#  bash bin/xxxControl.sh N%%N%%N%%restart
+```
+    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest -i yf01 cmd restart 
+    >>>> Welcome zhangjian12...
+    dbl-orp-app0109.dbl01    -/home/work/orp003    m1-orp-app17.m1          -/home/work/orp001
+     #--Total--#  2
+    #---CMD---#  bash bin/orpControl.sh N%%N%%N%%restart
     Continue (y/n):
+```
     
-### -o输入与屏幕输出
+### 使用逻辑机房过滤
 
-使用带-o 指定输出目录,将不会再打印在屏幕上,主要是对grep日志这种需求使用.速度要比屏幕打印快很多,是实时写入.
+```
+    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest  -I JX cmd restart
+    >>>> Welcome zhangjian12...
+    m1-orp-app17.m1          -/home/work/orp001    m1-orp-app25.m1          -/home/work/orp001
+   
+    #--Total--#  2
+    #---CMD---#  bash bin/orpControl.sh N%%N%%N%%restart
+    Continue (y/n):
+```
     
-    $ cat 1.list | pdo -o xxxout "pwd"
-    >>>> Welcome ajian...
-    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
-    yf-xxx-app03.yf01        -/home/work/xxx001    yf-xxx-app04.yf01        -/home/work/xxx001
-    yf-xxx-app00.yf01        -/home/work/xxx001    yf-xxx-app0148.yf01      -/home/work/xxx004
-    dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app17.m1          -/home/work/xxx001
-    m1-xxx-app25.m1          -/home/work/xxx001    m1-xxx-app0220.m1        -/home/work/xxx001
-    m1-xxx-app0154.m1        -/home/work/xxx004    cq01-xxx-app0242.cq01    -/home/work/xxx003
-    cq01-xxx-app0179.cq01    -/home/work/xxx001    cq01-xxx-app0131.cq01    -/home/work/xxx005
-    st01-xxx-app03.st01      -/home/work/xxx001    st01-xxx-app04.st01      -/home/work/xxx001
-    st01-xxx-app02.st01      -/home/work/xxx001    st01-xxx-app00.st01      -/home/work/xxx001
-    st01-xxx-app05.st01      -/home/work/xxx001    cq02-xxx-app0258.cq02    -/home/work/xxx001
-    cq02-xxx-app0287.cq02    -/home/work/xxx001    cq02-xxx-app0212.cq02    -/home/work/xxx001
-    jx-xxx-app17.jx          -/home/work/xxx001    ai-xxx-app10.ai01        -/home/work/xxx001
-    db-xxx-app17.db01        -/home/work/xxx003
+###  目录文件输出
 
+使用带-o 指定输出目录,将不会再打印在屏幕上,主要是对grep日志这种需求使用.反之就会输出在屏幕上.
+    
+ ```  
+    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest  -o xxxout "pwd"
+    >>>> Welcome zhangjian12...
+    yf-orp-app01.yf01        -/home/work/orp001    yf-orp-app02.yf01        -/home/work/orp001
+   
     #--Total--#  25
     #---CMD---#  pwd
     Continue (y/n):y
     go on ...
-    [1/25] yf-xxx-app01.yf01  [SUCCESS].
+    [1/25] yf-orp-app01.yf01  [SUCCESS].
     Continue (y/n):y
     go on ...
-    [2/25] yf-xxx-app02.yf01  [SUCCESS].
-    [3/25] yf-xxx-app03.yf01  [SUCCESS].
-    [4/25] yf-xxx-app04.yf01  [SUCCESS].
-    [5/25] yf-xxx-app00.yf01  [SUCCESS].
-    [6/25] yf-xxx-app0148.yf01  [SUCCESS].
-    [7/25] dbl-xxx-app0109.dbl01  [SUCCESS].
-    [8/25] m1-xxx-app17.m1  [SUCCESS].
-    [9/25] m1-xxx-app25.m1  [SUCCESS].
-    [10/25] m1-xxx-app0220.m1  [SUCCESS].
-    [11/25] m1-xxx-app0154.m1  [SUCCESS].
-    [12/25] cq01-xxx-app0242.cq01  [SUCCESS].
-    [13/25] cq01-xxx-app0179.cq01  [SUCCESS].
-    [14/25] cq01-xxx-app0131.cq01  [SUCCESS].
-    [15/25] st01-xxx-app03.st01  [SUCCESS].
-    [16/25] st01-xxx-app04.st01  [SUCCESS].
-    [17/25] st01-xxx-app02.st01  [SUCCESS].
-    [18/25] st01-xxx-app00.st01  [SUCCESS].
-    [19/25] st01-xxx-app05.st01  [SUCCESS].
-    [20/25] cq02-xxx-app0258.cq02  [SUCCESS].
-    [21/25] cq02-xxx-app0287.cq02  [SUCCESS].
-    [22/25] cq02-xxx-app0212.cq02  [SUCCESS].
-    [23/25] jx-xxx-app17.jx  [SUCCESS].
-    [24/25] ai-xxx-app10.ai01  [SUCCESS].
-    [25/25] db-xxx-app17.db01  [SUCCESS].
-
+    [2/25] yf-orp-app02.yf01  [SUCCESS].
+ ```
+    
 ### 超时killed进程
 
-时间都带单位,如1秒 1s , 1分钟 1m , 1小时 1h .
-
-这里的1.log是一个大文件.
-
-    $ pdo -f 1.list -t 1s -o out/ -r 3 "cat 1.log"
-    >>>> Welcome ajian...
-    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
-    yf-xxx-app03.yf01        -/home/work/xxx001    yf-xxx-app04.yf01        -/home/work/xxx001
-    yf-xxx-app00.yf01        -/home/work/xxx001    yf-xxx-app0148.yf01      -/home/work/xxx004
-    dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app17.m1          -/home/work/xxx001
-    m1-xxx-app25.m1          -/home/work/xxx001    m1-xxx-app0220.m1        -/home/work/xxx001
-    m1-xxx-app0154.m1        -/home/work/xxx004    cq01-xxx-app0242.cq01    -/home/work/xxx003
-    cq01-xxx-app0179.cq01    -/home/work/xxx001    cq01-xxx-app0131.cq01    -/home/work/xxx005
-    st01-xxx-app03.st01      -/home/work/xxx001    st01-xxx-app04.st01      -/home/work/xxx001
-    st01-xxx-app02.st01      -/home/work/xxx001    st01-xxx-app00.st01      -/home/work/xxx001
-    st01-xxx-app05.st01      -/home/work/xxx001    cq02-xxx-app0258.cq02    -/home/work/xxx001
-    cq02-xxx-app0287.cq02    -/home/work/xxx001    cq02-xxx-app0211.cq02    -/home/work/xxx001
-    cq02-xxx-app0212.cq02    -/home/work/xxx001    jx-xxx-app17.jx          -/home/work/xxx001
-    ai-xxx-app10.ai01        -/home/work/xxx001    db-xxx-app17.db01        -/home/work/xxx003
-
-
-    #--Total--#  26
+```
+    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest -t 1s -r 3 "cat log/ral-zoo.log"
+    >>>> Welcome zhangjian12...
+    yf-orp-app01.yf01        -/home/work/orp001    yf-orp-app02.yf01        -/home/work/orp001
+     #--Total--#  26
     #---CMD---#  cat log/ral-zoo.log
     Continue (y/n):y
     go on ...
-    [1/26] yf-xxx-app01.yf01  [Time Over KILLED].
+    [1/26] yf-orp-app01.yf01  [Time Over KILLED].
     Continue (y/n):y
     go on ...
-    [2/26] yf-xxx-app04.yf01  [Time Over KILLED].
-    [3/26] yf-xxx-app03.yf01  [Time Over KILLED].
-    [4/26] yf-xxx-app02.yf01  [Time Over KILLED].
-    [5/26] yf-xxx-app0148.yf01  [SUCCESS].
-    [6/26] dbl-xxx-app0109.dbl01  [SUCCESS].
-    [7/26] yf-xxx-app00.yf01  [Time Over KILLED].
-    [8/26] m1-xxx-app0220.m1  [SUCCESS].
-    [9/26] m1-xxx-app25.m1  [Time Over KILLED].
-    [10/26] m1-xxx-app17.m1  [Time Over KILLED].
-    [11/26] m1-xxx-app0154.m1  [SUCCESS].
-    [12/26] cq01-xxx-app0242.cq01  [SUCCESS].
-    [13/26] cq01-xxx-app0179.cq01  [Time Over KILLED].
-    [14/26] cq01-xxx-app0131.cq01  [SUCCESS].
-    [15/26] st01-xxx-app03.st01  [Time Over KILLED].
-    [16/26] st01-xxx-app04.st01  [Time Over KILLED].
-    [17/26] st01-xxx-app02.st01  [Time Over KILLED].
-    [18/26] st01-xxx-app00.st01  [Time Over KILLED].
-    [19/26] st01-xxx-app05.st01  [Time Over KILLED].
-    [20/26] cq02-xxx-app0211.cq02  [SUCCESS].
-    [21/26] cq02-xxx-app0258.cq02  [SUCCESS].
-    [22/26] cq02-xxx-app0287.cq02  [SUCCESS].
-    [23/26] ai-xxx-app10.ai01  [SUCCESS].
-    [24/26] cq02-xxx-app0212.cq02  [SUCCESS].
-    [25/26] jx-xxx-app17.jx  [Time Over KILLED].
-    [26/26] db-xxx-app17.db01  [SUCCESS].
-    
-### -c copy文件
+    [2/26] yf-orp-app04.yf01  [Time Over KILLED].
+```
+        
+### copy文件
 
-copy文件其实是可以copy目录的,只要远端的目录是存在的就不会报错.
-
-    $ cat 1.host  | pdo -c get.sh /tmp/
-    >>>> Welcome ajian...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work
+```
+    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -3  | pdo2 copy get.sh /tmp/
+    >>>> Welcome zhangjian12...
+    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
+    yf-orp-upload02.yf01     -/home/work
 
     #--Total--#  3
     #---CMD---#  get.sh --> /tmp/
     Continue (y/n):y
     go on ...
-    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
+    [1/3] yf-orp-upload05.yf01  [SUCCESS].
     
     Continue (y/n):y
     go on ...
-    [2/3] yf-xxx-upload01.yf01  [SUCCESS].
-    
-    [3/3] yf-xxx-upload02.yf01  [SUCCESS].
+    [2/3] yf-orp-upload01.yf01  [SUCCESS].
+   
     
     //检查下文件 
-    $ cat 1.host | pdo "ls /tmp/get.sh"
-    >>>> Welcome ajian...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work
+    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -3  | pdo "ls /tmp/get.sh"
+    >>>> Welcome zhangjian12...
+    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
+    yf-orp-upload02.yf01     -/home/work
     
     #--Total--#  3
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
+    [1/3] yf-orp-upload05.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):y
     go on ...
-    [2/3] yf-xxx-upload01.yf01  [SUCCESS].
+    [2/3] yf-orp-upload01.yf01  [SUCCESS].
     /tmp/get.sh
     
-    [3/3] yf-xxx-upload02.yf01  [SUCCESS].
+    [3/3] yf-orp-upload02.yf01  [SUCCESS].
     /tmp/get.sh
+```
 
 ### Retry功能
 
--R 就是相当于第四种列表来源,当执行错误,或者ctrl+c的时候就可以使用上,避免列表反复执行某些命令.
+这次多加两台服务器,有两台是没有这个脚本文件的.
 
-这次多加两台服务器,有两台是没有这个上面脚本文件的.所以新加的服务器会报错.
-
-    $ cat 2.list | pdo "ls /tmp/get.sh"
-    >>>> Welcome ajian...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
-    yf-xxx-upload04.yf01     -/home/work
+```
+    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -5  | pdo "ls /tmp/get.sh"
+    >>>> Welcome zhangjian12...
+    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
+    yf-orp-upload02.yf01     -/home/work           yf-orp-upload03.yf01     -/home/work
+    yf-orp-upload04.yf01     -/home/work
 
     #--Total--#  5
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/5] yf-xxx-upload05.yf01  [SUCCESS].
+    [1/5] yf-orp-upload05.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):y
     go on ...
-    [2/5] yf-xxx-upload01.yf01  [SUCCESS].
+    [2/5] yf-orp-upload01.yf01  [SUCCESS].
     /tmp/get.sh
     
-    [3/5] yf-xxx-upload02.yf01  [SUCCESS].
+    [3/5] yf-orp-upload02.yf01  [SUCCESS].
     /tmp/get.sh
     
-    [4/5] yf-xxx-upload03.yf01  [FAILED].
+    [4/5] yf-orp-upload03.yf01  [FAILED].
     ls: /tmp/get.sh: No such file or directory
     
-    [5/5] yf-xxx-upload04.yf01  [FAILED].
+    [5/5] yf-orp-upload04.yf01  [FAILED].
     ls: /tmp/get.sh: No such file or directory
     
     //使用-R 就可以直接拿到上一次执行失败的列表.
-    $pdo -R "ls /tmp/get.sh"
-    >>>> Welcome ajian...
-    yf-xxx-upload03.yf01     -/home/work           yf-xxx-upload04.yf01     -/home/work
+    work@yf-orp-apollo.yf01:upload_server$pdo -R "ls /tmp/get.sh"
+    >>>> Welcome zhangjian12...
+    yf-orp-upload03.yf01     -/home/work           yf-orp-upload04.yf01     -/home/work
     
     
     #--Total--#  2
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/2] yf-xxx-upload03.yf01  [FAILED].
+    [1/2] yf-orp-upload03.yf01  [FAILED].
     ls: /tmp/get.sh: No such file or directory
     
     //如果是使用的ctrl+C中断了列表,-R会记录未执行完(包括已经执行但失败的列表)
-    $ cat 1.host | pdo  -T 10s "ls /tmp/get.sh"
-    >>>> Welcome ajian...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
-    yf-xxx-upload04.yf01     -/home/work
+    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -5  | pdo  -T 10s "ls /tmp/get.sh"
+    >>>> Welcome zhangjian12...
+    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
+    yf-orp-upload02.yf01     -/home/work           yf-orp-upload03.yf01     -/home/work
+    yf-orp-upload04.yf01     -/home/work
 
     #--Total--#  5
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/5] yf-xxx-upload05.yf01  [SUCCESS].
+    [1/5] yf-orp-upload05.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):y
     go on ...
-    [2/5] yf-xxx-upload01.yf01  [SUCCESS].
+    [2/5] yf-orp-upload01.yf01  [SUCCESS].
     /tmp/get.sh
     
-    ^C$ pdo -R "ls /tmp/get.sh"
-    >>>> Welcome ajian...
-    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
-    yf-xxx-upload04.yf01     -/home/work
+    ^Cwork@yf-orp-apollo.yf01:upload_server$ pdo -R "ls /tmp/get.sh"
+    >>>> Welcome zhangjian12...
+    yf-orp-upload02.yf01     -/home/work           yf-orp-upload03.yf01     -/home/work
+    yf-orp-upload04.yf01     -/home/work
     
     #--Total--#  3
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/3] yf-xxx-upload02.yf01  [SUCCESS].
+    [1/3] yf-orp-upload02.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):
+```
  
- ### -e脚本执行功能
+### script 脚本执行功能
 
-    $ cat t.sh
+```
+    work@yf-orp-apollo.yf01:upload_server$ cat t.sh
     #!/bin/bash
 
     cd /tmp/ && pwd
     echo "test"
     touch /tmp/t.log
-    
-    $ cat 1.host | pdo -e t.sh
-    >>>> Welcome ajian...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work
+```
+执行
+```    
+    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -3  | pdo2 script t.sh
+    >>>> Welcome zhangjian12...
+    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
+    yf-orp-upload02.yf01     -/home/work
 
     #--Total--#  3
     #---CMD---#  Script: t.sh
     Continue (y/n):y
     go on ...
-    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
+    [1/3] yf-orp-upload05.yf01  [SUCCESS].
     /tmp
     test
-
-
-### 模板功能
-
-模板功能主要是解决重复的脚本修改动作,可以固化成一些模板,直接使用.
-
-* 配置中可以自己添加模板
-
-        $ cat ~/.pdo/pdo.conf
-        [TEMPLATE]
-        container : /home/work/.pdo/template/container.sh
-        
-* 模板内容,这个模版主要是在一台服务器上的xxxxxx目录里面进行操作. {{.CMD}} 就是会被替换的位置.
-
-        $ cat /home/work/.pdo/template/container.sh
-        #!/bin/bash
-        grep -l "^appName:" /home/work/xxx[0-9][0-9][0-9]/xxx.conf | while read file  ; do
-        eval $(awk '{if($1 ~ /xxxPath/){printf "apppath=%s\n",$2};if($1 ~ /appName/){printf "appName=%s",$2}}' $file)
-        echo $appName
-        if [  -d "$apppath" ];then
-                cd $apppath
-        
-                    {{.CMD}}
-        
-        fi
-        done
-        
-* 使用嵌入命令
- 
-            $ pdo -a xxxtest -temp container "pwd"
-            >>>> Welcome ajian...
-            yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/xxx001
-            yf-xxx-app00.yf01        -/home/work/xxx001    yf-xxx-app0148.yf01      -/home/work/xxx004
-            dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app0220.m1        -/home/work/xxx001
-            m1-xxx-app0154.m1        -/home/work/xxx004    cq01-xxx-app0242.cq01    -/home/work/xxx003
-            cq01-xxx-app0179.cq01    -/home/work/xxx001    cq02-xxx-app0258.cq02    -/home/work/xxx001
-            cq02-xxx-app0287.cq02    -/home/work/xxx001    cq02-xxx-app0211.cq02    -/home/work/xxx001
-            jx-xxx-app17.jx          -/home/work/xxx001    db-xxx-app17.db01        -/home/work/xxx003
-
-
-            #--Total--#  14
-            #---CMD---#  pwd
-            Continue (y/n):y
-            go on ...
-            [1/14] yf-xxx-app02.yf01  [SUCCESS].
-            xxxtest
-            /home/work/xxx001
-            jingyan
-            /home/work/xxx002
-            pc_anti
-            /home/work/xxx003
-            bakan
-            /home/work/xxx004
-            smallapp
-            /home/work/xxx006
-            appui
-            /home/work/xxx008
-            
-            Continue (y/n):n
-            exit ...
-
-* 还可以嵌入脚本
-
-        //脚本内容
-        $ cat 1.sh
-        
-        echo "1.sh"
-        pwd
-       
-        //嵌入脚本使用-b
-        $ pdo -a xxxtest -temp container -b 1.sh
-        >>>> Welcome ajian...
-        yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/xxx001
-        yf-xxx-app00.yf01        -/home/work/xxx001    yf-xxx-app0148.yf01      -/home/work/xxx004
-        dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app0220.m1        -/home/work/xxx001
-        m1-xxx-app0154.m1        -/home/work/xxx004    cq01-xxx-app0242.cq01    -/home/work/xxx003
-        cq01-xxx-app0179.cq01    -/home/work/xxx001    cq02-xxx-app0258.cq02    -/home/work/xxx001
-        cq02-xxx-app0287.cq02    -/home/work/xxx001    cq02-xxx-app0211.cq02    -/home/work/xxx001
-        jx-xxx-app17.jx          -/home/work/xxx001    db-xxx-app17.db01        -/home/work/xxx003
-        
-        
-        #--Total--#  14
-        #---CMD---#
-        Continue (y/n):y
-        go on ...
-        [1/14] yf-xxx-app02.yf01  [SUCCESS].
-        xxxtest
-        1.sh
-        /home/work/xxx001
-        jingyan
-        1.sh
-        /home/work/xxx002
-        pc_anti
-        1.sh
-        /home/work/xxx003
-        bakan
-        1.sh
-        /home/work/xxx004
-        smallapp
-        1.sh
-        /home/work/xxx006
-        appui
-        1.sh
-        /home/work/xxx008
+```
         
 ###  行显示与匹配
 
@@ -536,30 +457,33 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
 > redis迁移至少有原来的一主一从,新主和新从.在迁移的过程中需要同时观察四台服务器的变化.如果是每次ssh四台服务器tail 日志是很麻烦而且容易出错.
 
 现在使用pdo命令:
-        
+ 
+ ```       
         //操作的主机列表1.list
-        tc-yyy-redis40.tc /home/yyy/redis-shard3   //old master 
-        cq02-yyy-redis80.cq02 /home/yyy/redis-shard3 //new master 
-        yf-yyy-redis40.yf01 /home/yyy/redis-shard3 //old slave 
-        jx-yyy-redis80.jx /home/yyy/redis-shard3  //new slave 
-        第一步操作:  yf-yyy-redis40.yf01为主 --> cq02-yyy-redis80.cq02 
+        tc-arch-redis40.tc /home/arch/redis-ting-listen-shard3   //old master 
+        cq02-arch-redis80.cq02 /home/arch/redis-ting-listen-shard3 //new master 
+        yf-arch-redis40.yf01 /home/arch/redis-ting-listen-shard3 //old slave 
+        jx-arch-redis80.jx /home/arch/redis-ting-listen-shard3  //new slave 
+        第一步操作:  yf-arch-redis40.yf01为主 --> cq02-arch-redis80.cq02 
 
         #命令
-        #cat 1.list | pdo -r 5 -y -show row  -match "success" "tail -f log/redis.log"
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:51 * Slave ask for new-synchronization  //被要求同步 
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:56:58 * (non critical): Master does not understand REPLCONF listening-port: Reading from master: Connection timed out
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Slave ask for synchronization
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Starting BGSAVE for SYNC
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Background saving started by pid 22855
-        > yf-yyy-redis40.yf01      >> [22855] 06 Jan 13:58:31 * DB saved on disk   //dump到磁盘
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:58:31 * Background saving terminated with success
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:58:31 * MASTER <-> SLAVE sync: receiving 1868940396 bytes from master  //从接收到主的文件
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:58:47 * MASTER <-> SLAVE sync: Loading DB in memory //将接收到的文件加载到内存
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:58:47 * Synchronization with slave succeeded  //文件同步成功
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 # Update masterstarttime[1382324097] after loading db
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * AA: see masterstarttime: ip[10.36.114.56], port[9973], timestamp[1382324097]
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * Write aof_global_offset[92961804447] to new aof_file[46] success
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * MASTER <-> SLAVE sync: Finished with success //slave完成主从同步,说明第一步已经结束.
+        #cat 1.list | pdo2 -r 5 -y -show row  -match "success" "tail -f log/redis.log"
+        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:51 * Slave ask for new-synchronization  //被要求同步 
+        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 13:56:58 * (non critical): Master does not understand REPLCONF listening-port: Reading from master: Connection timed out
+        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Slave ask for synchronization
+        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Starting BGSAVE for SYNC
+        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Background saving started by pid 22855
+        > yf-arch-redis40.yf01      >> [22855] 06 Jan 13:58:31 * DB saved on disk   //dump到磁盘
+        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:58:31 * Background saving terminated with success
+        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 13:58:31 * MASTER <-> SLAVE sync: receiving 1868940396 bytes from master  //从接收到主的文件
+        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 13:58:47 * MASTER <-> SLAVE sync: Loading DB in memory //将接收到的文件加载到内存
+        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:58:47 * Synchronization with slave succeeded  //文件同步成功
+        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 # Update masterstarttime[1382324097] after loading db
+        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 * AA: see masterstarttime: ip[10.36.114.56], port[9973], timestamp[1382324097]
+        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 * Write aof_global_offset[92961804447] to new aof_file[46] success
+        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 * MASTER <-> SLAVE sync: Finished with success //slave完成主从同步,说明第一步已经结束.
+
+```
 
 说明:
  
@@ -569,6 +493,7 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
 
 以下是一个测试脚本:随机打印数字 1.sh
 
+```
         #!/bin/bash
         for x in `seq 1 10` ; do
             echo $x
@@ -577,5 +502,6 @@ copy文件其实是可以copy目录的,只要远端的目录是存在的就不�
         
          //可以使用如下命令:
        # cat 1.list | pdo -r 5 -y -show row  -match "5" -e 1.sh
+```
 
-还有更多的组合哦.
+还有更多的组合,可以找实验.
