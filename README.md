@@ -1,4 +1,9 @@
-批量执行工具PDO,主要是解决减少批量执行的繁锁,更安全便捷的操作命令,尤其是解决ORP的目录依赖的问题.
+批量执行工具PDO,主要是解决减少批量执行的繁锁,更安全便捷的操作命令.
+
+
+**其中的ORP是内部的PASS平台,可以忽略相关的-a -p相关操作.**  
+
+**该工具服务于几个内部PASS平台和其它环境,可能会有些定制化功能和例子可以忽略.** 
 
 * 工具名称: pdo(parallel do something) 
 
@@ -14,7 +19,7 @@
 
 * 更新历史
 
-	```
+```
 // Version 2.0.20140821 增加print打印列表和prev提前显示的功能
 // Version 2.0.20141121 fix bugs: -y 第一个job会先执行完才继续 ; ssh 输出的warning ; -o 输出文件冲突的问题; -o 失败不显示状态.
 // Version 2.0.20151228 增加bns noahTree -b 的input
@@ -35,28 +40,27 @@
 
 先获取依赖的第三方库: 
 
-	```
     go get github.com/cihub/seelog
     go get github.com/robfig/config
-    ```
+   
 
 安装go 环境.
 
-    ```
     go build pdo2.go
-    ```
+    
     
 ### 配置
  
  第一次创建配置文件,会创建~/.pdo/pdo.conf ~/.pdo/log.xml 两个文件. 可以进行定制.
  
- ```
- pdo2 setup 
- ```  
+ 
+ 	pdo2 setup 
+  
     
 ###  Pdo Help 
 
 ```
+
 Usage: pdo2 [input control][thread control] [output control][subcommand] <content>
 
   input control:
@@ -105,13 +109,12 @@ Usage: pdo2 [input control][thread control] [output control][subcommand] <conten
     pdo2 -a download-client script test.sh
   ## local command
     pdo2 -a download-client "scp a.txt {{.Host}}:{{.Path}}/log/"
+
 ```
 
 ## pdo 结构
 
-``` 
-Usage: pdo2 [input control][thread control] [output control][subcommand] <content>
- ```
+```Usage: pdo2 [input control][thread control] [output control][subcommand] <content>```
 
 分为四部分:
 
