@@ -1,17 +1,19 @@
-批量执行工具PDO,主要是解决减少批量执行的繁锁,更安全便捷的操作命令.
+批量执行工具PDO,主要是解决减少批量执行的繁锁,更安全便捷的操作命令.依赖ssh的信任密钥,不需要安装agent等服务.定位比较简单,不复杂化. 
 
+借鉴了pssh(python) onall(perl)等批量工具,比后来出现的Ansible Salt更简单. 定位简单,功能不简单.得易于golang和多年的一线运维经验.
 
-**其中的ORP是内部的PASS平台,可以忽略相关的-a -p相关操作.**  
+优势: 
 
-**该工具服务于几个内部PASS平台和其它环境,可能会有些定制化功能和例子可以忽略.** 
+1. 速度快.
+2. 易于操作.
+3. 可以通过组合不同的参数解决大多数的问题. 
+
+PS:
+
+* 其中的ORP是内部的PASS平台,可以忽略相关的-a -p相关操作.
+ * 该工具服务于几个内部PASS平台和其它环境,可能会有些定制化功能和例子可以忽略如-bns -noah等. 
 
 * 工具名称: pdo(parallel do something) 
-
-         work@yf-orp-apollo.yf01:router$ which pdo
-         /usr/local/otools/bin/pdo
-         work@yf-orp-apollo.yf01:router$ which pdo2
-         /usr/local/otools/bin/pdo2
-
 * pdo V1 因为还有些地方在使用所以,将version 1的文档链接起来. [pdov1.md](pdov1.md)
 * pdo V2 是最新的工具,取消了原来依赖ofind的方式,以下主要是介绍pdo2这个工具.
 * pdo V2 优化了输出,可以时时写入,可以超时中断,区分屏幕输出与文件写入,屏幕输出为一次性输出,文件写入为时时写入.
@@ -26,6 +28,8 @@
 // Version 2.0.20151231 增加指定User Name
 // Version 2.0.20160130 retry -R 优先及最高. setup完善.
 // Version 2.0.20160202 -bns -noah 增加多个的支持,中间用逗号分割.
+// Version 2.0.20161007 增加connect failed的判断.
+// Version 2.0.20161017 增加scrpit参数
 ```
 
 ## 安装
@@ -60,15 +64,14 @@
 ###  Pdo Help 
 
 ```
-
-Usage: pdo2 [input control][thread control] [output control][subcommand] <content>
+Usage: ./pdo2 [input control][thread control] [output control][subcommand] <content>
 
   input control:
     -f <file>           from File "HOST PATH".
-    -a <orp appname>    from database.
-    -p <orp product>    from database.
+    -a <orp appname>    from orp database.
+    -p <orp product>    from orp database.
     -R                  from last failure list.
-    -bns <bns service>    from bns service, eg: pdo2 -bns redis.ksarch.all -r 10 "pwd"
+    -bns <bns service>    from bns service, eg: pdo2 -bns redis.ksarch.all,memcache.ksarch.nj -r 10 "pwd"
     -noah <noah tree path>    from noah tree path, eg: pdo2 -noah BAIDU_WAIMAI_WAIMAI -r 10 "pwd"
     default             from pipe,eg: cat file | pdo2
 
@@ -93,23 +96,30 @@ Usage: pdo2 [input control][thread control] [output control][subcommand] <conten
     help <subcommand>           get subcommand help.
     print                       print host list. hostname path.
     version                     get the pdo version.
-    setup                       setup the configuration at the first time .[not finished]
-    conf                        save the used args.[not finished]
+    setup                       setup the configuration at the first time .
+
+  other :
+      -u  <username>      Specifies the remote user .
 
   Examples:
-  ##simple ,read from pipe.
-    cat list | pdo2 "pwd"
-  ##-a from orp , -r  concurrent processing
+  ## the first time , setup pdo conf pdo.conf and log.xml
+    pdo2 setup
+  ## simple ,read from pipe. -r 100 , concurrent 100.
+    cat list | pdo2 -r 100 "pwd"
+  ## -a from orp , -r  concurrent processing
     pdo2 -a download-client -r 10 "pwd"
-  ##-show row ,show line by line
-    pdo2 -p tieba -y -show row "pwd"
-  ##copy files
-    pdo2 -a download-client copy 1.txt /tmp/
-  ##excute script files
-    pdo2 -a download-client script test.sh
+  ## -show row ,show line by line
+    cat list | pdo2 -r 10  -y -show row "pwd"
+  ## copy files
+    cat list | pdo2 -r 10 copy 1.txt /tmp/
+  ## excute script files
+    cat list | pdo2 -r 100 script test.sh args1
   ## local command
     pdo2 -a download-client "scp a.txt {{.Host}}:{{.Path}}/log/"
-
+  ## check network
+    cat list | pdo2 -r 100  "ping -c 1 {{.Host}}"
+  ## Specifies the user
+    cat list | pdo2 -u root -r 10 "pwd"
 ```
 
 ## pdo 结构
