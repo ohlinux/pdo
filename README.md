@@ -68,10 +68,10 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 
   input control:
     -f <file>           from File "HOST PATH".
-    -a <orp appname>    from orp database.
-    -p <orp product>    from orp database.
+    -a <xxx appname>    from xxx database.
+    -p <xxx product>    from xxx database.
     -R                  from last failure list.
-    -bns <bns service>    from bns service, eg: pdo2 -bns redis.ksarch.all,memcache.ksarch.nj -r 10 "pwd"
+    -bns <bns service>    from bns service, eg: pdo2 -bns redis.ksyyy.all,memcache.ksyyy.nj -r 10 "pwd"
     -noah <noah tree path>    from noah tree path, eg: pdo2 -noah BAIDU_WAIMAI_WAIMAI -r 10 "pwd"
     default             from pipe,eg: cat file | pdo2
 
@@ -106,7 +106,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
     pdo2 setup
   ## simple ,read from pipe. -r 100 , concurrent 100.
     cat list | pdo2 -r 100 "pwd"
-  ## -a from orp , -r  concurrent processing
+  ## -a from xxx , -r  concurrent processing
     pdo2 -a download-client -r 10 "pwd"
   ## -show row ,show line by line
     cat list | pdo2 -r 10  -y -show row "pwd"
@@ -165,7 +165,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 输出方式有三种:
 
 * 默认是事后输出,只有等远程目标机器执行完所有的请求才会输出标准输出.
-* -o <dir> 是将标准输出保存为按host的文件,如果目录下面存在相同的host 会在原来的基础上加1 如: cq02-orp-app001.cq02_1
+* -o <dir> 是将标准输出保存为按host的文件,如果目录下面存在相同的host 会在原来的基础上加1 如: cq02-xxx-app001.cq02_1
 * -show <row>  按行输出,将标准输出添加上host标签 按行进行输出. 
 * -show <row> -match <string> 按行输出可以-match 字符串,高亮显示 .
 
@@ -205,9 +205,9 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
      Log:/home/work/.pdo/log/pdo.log  //日志配置
 
      [Mysql] //数据库配置
-     Host:st01-orp-con00.st01
+     Host:st01-xxx-con00.st01
      Port:3306
-     DBname:orp
+     DBname:xxx
      User:rd
      Pass:MhxzKhl
  
@@ -216,7 +216,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
      TC:cq02,tc,m1,db01
  
      [CMD] //短命令
-     restart: bash bin/orpControl.sh N%%N%%N%%restart
+     restart: bash bin/xxxControl.sh N%%N%%N%%restart
 ```
 
 ### host列表文件
@@ -225,9 +225,9 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 
 ```
     cat godir/1.list  
-    yf-orp-pre01.vm /home/work/orp001
-    yf-orp-app01.yf01 /home/work/orp001
-    yf-orp-app02.yf01 /home/work/orp001
+    yf-xxx-pre01.vm /home/work/xxx001
+    yf-xxx-app01.yf01 /home/work/xxx001
+    yf-xxx-app02.yf01 /home/work/xxx001
 ```
 
 ### 使用管道方式
@@ -235,43 +235,43 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ```
     cat godir/1.list | pdo2 -r 2 "pwd"
     >>>> Welcome zhangjian12...
-    yf-orp-pre01.vm          -/home/work/orp001    yf-orp-app01.yf01        -/home/work/orp001
-    yf-orp-app02.yf01        -/home/work/orp001    yf-orp-app03.yf01        -/home/work/
+    yf-xxx-pre01.vm          -/home/work/xxx001    yf-xxx-app01.yf01        -/home/work/xxx001
+    yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/
 ```
     
 ### 使用app方式与简写命令
 
-使用数据库app方式,以orptest app为例,cmd为缩写命令= bash bin/orpControl.sh N%%N%%N%%restart
+使用数据库app方式,以xxxtest app为例,cmd为缩写命令= bash bin/xxxControl.sh N%%N%%N%%restart
 
 ```
-    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest cmd restart
+    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest cmd restart
     >>>> Welcome zhangjian12...
-    yf-orp-app01.yf01        -/home/work/orp001    yf-orp-app02.yf01        -/home/work/orp001
+    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
     #--Total--#  2
-    #---CMD---#  bash bin/orpControl.sh N%%N%%N%%restart
+    #---CMD---#  bash bin/xxxControl.sh N%%N%%N%%restart
     Continue (y/n):
 ```
     
 ### 使用idc过滤
 
 ```
-    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest -i yf01 cmd restart 
+    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest -i yf01 cmd restart 
     >>>> Welcome zhangjian12...
-    dbl-orp-app0109.dbl01    -/home/work/orp003    m1-orp-app17.m1          -/home/work/orp001
+    dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app17.m1          -/home/work/xxx001
      #--Total--#  2
-    #---CMD---#  bash bin/orpControl.sh N%%N%%N%%restart
+    #---CMD---#  bash bin/xxxControl.sh N%%N%%N%%restart
     Continue (y/n):
 ```
     
 ### 使用逻辑机房过滤
 
 ```
-    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest  -I JX cmd restart
+    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest  -I JX cmd restart
     >>>> Welcome zhangjian12...
-    m1-orp-app17.m1          -/home/work/orp001    m1-orp-app25.m1          -/home/work/orp001
+    m1-xxx-app17.m1          -/home/work/xxx001    m1-xxx-app25.m1          -/home/work/xxx001
    
     #--Total--#  2
-    #---CMD---#  bash bin/orpControl.sh N%%N%%N%%restart
+    #---CMD---#  bash bin/xxxControl.sh N%%N%%N%%restart
     Continue (y/n):
 ```
     
@@ -280,74 +280,74 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 使用带-o 指定输出目录,将不会再打印在屏幕上,主要是对grep日志这种需求使用.反之就会输出在屏幕上.
     
  ```  
-    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest  -o xxxout "pwd"
+    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest  -o xxxout "pwd"
     >>>> Welcome zhangjian12...
-    yf-orp-app01.yf01        -/home/work/orp001    yf-orp-app02.yf01        -/home/work/orp001
+    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
    
     #--Total--#  25
     #---CMD---#  pwd
     Continue (y/n):y
     go on ...
-    [1/25] yf-orp-app01.yf01  [SUCCESS].
+    [1/25] yf-xxx-app01.yf01  [SUCCESS].
     Continue (y/n):y
     go on ...
-    [2/25] yf-orp-app02.yf01  [SUCCESS].
+    [2/25] yf-xxx-app02.yf01  [SUCCESS].
  ```
     
 ### 超时killed进程
 
 ```
-    work@yf-orp-apollo.yf01:godir$ pdo2 -a orptest -t 1s -r 3 "cat log/ral-zoo.log"
+    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest -t 1s -r 3 "cat log/ral-zoo.log"
     >>>> Welcome zhangjian12...
-    yf-orp-app01.yf01        -/home/work/orp001    yf-orp-app02.yf01        -/home/work/orp001
+    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
      #--Total--#  26
     #---CMD---#  cat log/ral-zoo.log
     Continue (y/n):y
     go on ...
-    [1/26] yf-orp-app01.yf01  [Time Over KILLED].
+    [1/26] yf-xxx-app01.yf01  [Time Over KILLED].
     Continue (y/n):y
     go on ...
-    [2/26] yf-orp-app04.yf01  [Time Over KILLED].
+    [2/26] yf-xxx-app04.yf01  [Time Over KILLED].
 ```
         
 ### copy文件
 
 ```
-    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -3  | pdo2 copy get.sh /tmp/
+    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo2 copy get.sh /tmp/
     >>>> Welcome zhangjian12...
-    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
-    yf-orp-upload02.yf01     -/home/work
+    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
+    yf-xxx-upload02.yf01     -/home/work
 
     #--Total--#  3
     #---CMD---#  get.sh --> /tmp/
     Continue (y/n):y
     go on ...
-    [1/3] yf-orp-upload05.yf01  [SUCCESS].
+    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
     
     Continue (y/n):y
     go on ...
-    [2/3] yf-orp-upload01.yf01  [SUCCESS].
+    [2/3] yf-xxx-upload01.yf01  [SUCCESS].
    
     
     //检查下文件 
-    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -3  | pdo "ls /tmp/get.sh"
+    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo "ls /tmp/get.sh"
     >>>> Welcome zhangjian12...
-    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
-    yf-orp-upload02.yf01     -/home/work
+    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
+    yf-xxx-upload02.yf01     -/home/work
     
     #--Total--#  3
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/3] yf-orp-upload05.yf01  [SUCCESS].
+    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):y
     go on ...
-    [2/3] yf-orp-upload01.yf01  [SUCCESS].
+    [2/3] yf-xxx-upload01.yf01  [SUCCESS].
     /tmp/get.sh
     
-    [3/3] yf-orp-upload02.yf01  [SUCCESS].
+    [3/3] yf-xxx-upload02.yf01  [SUCCESS].
     /tmp/get.sh
 ```
 
@@ -356,75 +356,75 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 这次多加两台服务器,有两台是没有这个脚本文件的.
 
 ```
-    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -5  | pdo "ls /tmp/get.sh"
+    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -5  | pdo "ls /tmp/get.sh"
     >>>> Welcome zhangjian12...
-    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
-    yf-orp-upload02.yf01     -/home/work           yf-orp-upload03.yf01     -/home/work
-    yf-orp-upload04.yf01     -/home/work
+    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
+    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
+    yf-xxx-upload04.yf01     -/home/work
 
     #--Total--#  5
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/5] yf-orp-upload05.yf01  [SUCCESS].
+    [1/5] yf-xxx-upload05.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):y
     go on ...
-    [2/5] yf-orp-upload01.yf01  [SUCCESS].
+    [2/5] yf-xxx-upload01.yf01  [SUCCESS].
     /tmp/get.sh
     
-    [3/5] yf-orp-upload02.yf01  [SUCCESS].
+    [3/5] yf-xxx-upload02.yf01  [SUCCESS].
     /tmp/get.sh
     
-    [4/5] yf-orp-upload03.yf01  [FAILED].
+    [4/5] yf-xxx-upload03.yf01  [FAILED].
     ls: /tmp/get.sh: No such file or directory
     
-    [5/5] yf-orp-upload04.yf01  [FAILED].
+    [5/5] yf-xxx-upload04.yf01  [FAILED].
     ls: /tmp/get.sh: No such file or directory
     
     //使用-R 就可以直接拿到上一次执行失败的列表.
-    work@yf-orp-apollo.yf01:upload_server$pdo -R "ls /tmp/get.sh"
+    work@yf-xxx-apollo.yf01:upload_server$pdo -R "ls /tmp/get.sh"
     >>>> Welcome zhangjian12...
-    yf-orp-upload03.yf01     -/home/work           yf-orp-upload04.yf01     -/home/work
+    yf-xxx-upload03.yf01     -/home/work           yf-xxx-upload04.yf01     -/home/work
     
     
     #--Total--#  2
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/2] yf-orp-upload03.yf01  [FAILED].
+    [1/2] yf-xxx-upload03.yf01  [FAILED].
     ls: /tmp/get.sh: No such file or directory
     
     //如果是使用的ctrl+C中断了列表,-R会记录未执行完(包括已经执行但失败的列表)
-    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -5  | pdo  -T 10s "ls /tmp/get.sh"
+    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -5  | pdo  -T 10s "ls /tmp/get.sh"
     >>>> Welcome zhangjian12...
-    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
-    yf-orp-upload02.yf01     -/home/work           yf-orp-upload03.yf01     -/home/work
-    yf-orp-upload04.yf01     -/home/work
+    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
+    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
+    yf-xxx-upload04.yf01     -/home/work
 
     #--Total--#  5
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/5] yf-orp-upload05.yf01  [SUCCESS].
+    [1/5] yf-xxx-upload05.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):y
     go on ...
-    [2/5] yf-orp-upload01.yf01  [SUCCESS].
+    [2/5] yf-xxx-upload01.yf01  [SUCCESS].
     /tmp/get.sh
     
-    ^Cwork@yf-orp-apollo.yf01:upload_server$ pdo -R "ls /tmp/get.sh"
+    ^Cwork@yf-xxx-apollo.yf01:upload_server$ pdo -R "ls /tmp/get.sh"
     >>>> Welcome zhangjian12...
-    yf-orp-upload02.yf01     -/home/work           yf-orp-upload03.yf01     -/home/work
-    yf-orp-upload04.yf01     -/home/work
+    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
+    yf-xxx-upload04.yf01     -/home/work
     
     #--Total--#  3
     #---CMD---#  ls /tmp/get.sh
     Continue (y/n):y
     go on ...
-    [1/3] yf-orp-upload02.yf01  [SUCCESS].
+    [1/3] yf-xxx-upload02.yf01  [SUCCESS].
     /tmp/get.sh
     
     Continue (y/n):
@@ -433,7 +433,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ### script 脚本执行功能
 
 ```
-    work@yf-orp-apollo.yf01:upload_server$ cat t.sh
+    work@yf-xxx-apollo.yf01:upload_server$ cat t.sh
     #!/bin/bash
 
     cd /tmp/ && pwd
@@ -442,16 +442,16 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ```
 执行
 ```    
-    work@yf-orp-apollo.yf01:upload_server$ get_instance_by_service picupload.orp.all | head -3  | pdo2 script t.sh
+    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo2 script t.sh
     >>>> Welcome zhangjian12...
-    yf-orp-upload05.yf01     -/home/work           yf-orp-upload01.yf01     -/home/work
-    yf-orp-upload02.yf01     -/home/work
+    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
+    yf-xxx-upload02.yf01     -/home/work
 
     #--Total--#  3
     #---CMD---#  Script: t.sh
     Continue (y/n):y
     go on ...
-    [1/3] yf-orp-upload05.yf01  [SUCCESS].
+    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
     /tmp
     test
 ```
@@ -473,28 +473,28 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
  
  ```       
         //操作的主机列表1.list
-        tc-arch-redis40.tc /home/arch/redis-ting-listen-shard3   //old master 
-        cq02-arch-redis80.cq02 /home/arch/redis-ting-listen-shard3 //new master 
-        yf-arch-redis40.yf01 /home/arch/redis-ting-listen-shard3 //old slave 
-        jx-arch-redis80.jx /home/arch/redis-ting-listen-shard3  //new slave 
-        第一步操作:  yf-arch-redis40.yf01为主 --> cq02-arch-redis80.cq02 
+        tc-yyy-redis40.tc /home/yyy/redis-ting-listen-shard3   //old master 
+        cq02-yyy-redis80.cq02 /home/yyy/redis-ting-listen-shard3 //new master 
+        yf-yyy-redis40.yf01 /home/yyy/redis-ting-listen-shard3 //old slave 
+        jx-yyy-redis80.jx /home/yyy/redis-ting-listen-shard3  //new slave 
+        第一步操作:  yf-yyy-redis40.yf01为主 --> cq02-yyy-redis80.cq02 
 
         #命令
         #cat 1.list | pdo2 -r 5 -y -show row  -match "success" "tail -f log/redis.log"
-        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:51 * Slave ask for new-synchronization  //被要求同步 
-        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 13:56:58 * (non critical): Master does not understand REPLCONF listening-port: Reading from master: Connection timed out
-        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Slave ask for synchronization
-        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Starting BGSAVE for SYNC
-        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Background saving started by pid 22855
-        > yf-arch-redis40.yf01      >> [22855] 06 Jan 13:58:31 * DB saved on disk   //dump到磁盘
-        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:58:31 * Background saving terminated with success
-        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 13:58:31 * MASTER <-> SLAVE sync: receiving 1868940396 bytes from master  //从接收到主的文件
-        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 13:58:47 * MASTER <-> SLAVE sync: Loading DB in memory //将接收到的文件加载到内存
-        > yf-arch-redis40.yf01      >> [11523] 06 Jan 13:58:47 * Synchronization with slave succeeded  //文件同步成功
-        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 # Update masterstarttime[1382324097] after loading db
-        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 * AA: see masterstarttime: ip[10.36.114.56], port[9973], timestamp[1382324097]
-        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 * Write aof_global_offset[92961804447] to new aof_file[46] success
-        > cq02-arch-redis80.cq02    >> [14752] 06 Jan 14:01:21 * MASTER <-> SLAVE sync: Finished with success //slave完成主从同步,说明第一步已经结束.
+        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:51 * Slave ask for new-synchronization  //被要求同步 
+        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:56:58 * (non critical): Master does not understand REPLCONF listening-port: Reading from master: Connection timed out
+        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Slave ask for synchronization
+        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Starting BGSAVE for SYNC
+        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Background saving started by pid 22855
+        > yf-yyy-redis40.yf01      >> [22855] 06 Jan 13:58:31 * DB saved on disk   //dump到磁盘
+        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:58:31 * Background saving terminated with success
+        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:58:31 * MASTER <-> SLAVE sync: receiving 1868940396 bytes from master  //从接收到主的文件
+        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:58:47 * MASTER <-> SLAVE sync: Loading DB in memory //将接收到的文件加载到内存
+        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:58:47 * Synchronization with slave succeeded  //文件同步成功
+        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 # Update masterstarttime[1382324097] after loading db
+        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * AA: see masterstarttime: ip[10.36.114.56], port[9973], timestamp[1382324097]
+        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * Write aof_global_offset[92961804447] to new aof_file[46] success
+        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * MASTER <-> SLAVE sync: Finished with success //slave完成主从同步,说明第一步已经结束.
 
 ```
 
