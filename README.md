@@ -8,14 +8,9 @@
 2. 易于操作.
 3. 可以通过组合不同的参数解决大多数的问题. 
 
-PS:
-
-* 其中的ORP是内部的PASS平台,可以忽略相关的-a -p相关操作.
- * 该工具服务于几个内部PASS平台和其它环境,可能会有些定制化功能和例子可以忽略如-bns -noah等. 
-
 * 工具名称: pdo(parallel do something) 
 * pdo V1 因为还有些地方在使用所以,将version 1的文档链接起来. [pdov1.md](pdov1.md)
-* pdo V2 是最新的工具,取消了原来依赖ofind的方式,以下主要是介绍pdo2这个工具.
+* pdo V2 是最新的工具,取消了原来依赖ofind的方式,以下主要是介绍pdo这个工具.
 * pdo V2 优化了输出,可以时时写入,可以超时中断,区分屏幕输出与文件写入,屏幕输出为一次性输出,文件写入为时时写入.
 * pdo V2 优化了并发输出,可以让并发速度更快,并且加入了很多其它复杂的功能.
 
@@ -50,30 +45,26 @@ PS:
 
 安装go 环境.
 
-    go build pdo2.go
+    go build pdo.go
     
     
 ### 配置
  
- 第一次创建配置文件,会创建~/.pdo/pdo.conf ~/.pdo/log.xml 两个文件. 可以进行定制.
+ 第一次创建配置文件,会创建~/.pdo/pdo.conf ~/.pdo/log.xml 两个文件. 可以进行修改定制.
  
  
- 	pdo2 setup 
+ 	pdo setup 
   
     
 ###  Pdo Help 
 
 ```
-Usage: ./pdo2 [input control][thread control] [output control][subcommand] <content>
+Usage: pdo [input control][thread control] [output control][subcommand] <content>
 
   input control:
     -f <file>           from File "HOST PATH".
-    -a <xxx appname>    from xxx database.
-    -p <xxx product>    from xxx database.
     -R                  from last failure list.
-    -bns <bns service>    from bns service, eg: pdo2 -bns redis.ksyyy.all,memcache.ksyyy.nj -r 10 "pwd"
-    -noah <noah tree path>    from noah tree path, eg: pdo2 -noah BAIDU_WAIMAI_WAIMAI -r 10 "pwd"
-    default             from pipe,eg: cat file | pdo2
+    default             from pipe,eg: cat file | pdo
 
   output control:
     default             display after finish.
@@ -96,35 +87,31 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
     help <subcommand>           get subcommand help.
     print                       print host list. hostname path.
     version                     get the pdo version.
-    setup                       setup the configuration at the first time .
+    setup                       setup the configuration at the first time .[not finished]
+    conf                        save the used args.[not finished]
 
   other :
-      -u  <username>      Specifies the remote user .
+    -u  <username>  	Specifies the remote user .
 
   Examples:
   ## the first time , setup pdo conf pdo.conf and log.xml
-    pdo2 setup
-  ## simple ,read from pipe. -r 100 , concurrent 100.
-    cat list | pdo2 -r 100 "pwd"
-  ## -a from xxx , -r  concurrent processing
-    pdo2 -a download-client -r 10 "pwd"
+    pdo setup
+  ## simple ,read from pipe.
+    cat host.list | pdo "pwd"
   ## -show row ,show line by line
-    cat list | pdo2 -r 10  -y -show row "pwd"
   ## copy files
-    cat list | pdo2 -r 10 copy 1.txt /tmp/
+    pdo -f host.list copy 1.txt /tmp/
   ## excute script files
-    cat list | pdo2 -r 100 script test.sh args1
+    pdo -f host.list script test.sh
   ## local command
-    pdo2 -a download-client "scp a.txt {{.Host}}:{{.Path}}/log/"
-  ## check network
-    cat list | pdo2 -r 100  "ping -c 1 {{.Host}}"
+    pdo -f host.list "scp a.txt {{.Host}}:{{.Path}}/log/"
   ## Specifies the user
-    cat list | pdo2 -u root -r 10 "pwd"
+    pdo -u root -f host.list -r 10 "pwd"
 ```
 
 ## pdo 结构
 
-```Usage: pdo2 [input control][thread control] [output control][subcommand] <content>```
+```Usage: pdo [input control][thread control] [output control][subcommand] <content>```
 
 分为四部分:
 
@@ -142,7 +129,6 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 获取机器列表和相对应的路径有三种途径.
 
 1. -f 文件,host的列表文件,可以是一列,也可以是两列有相关的目录依赖.后面有例子.
-2. -a app名字;-p 产品名;-a支持多app采用 app1,app2逗号分隔.
 3. 标准输入 cat 1.host | pdo
 4. -R当使用的时候,使用的是上次失败的列表.详细查看例子"Retry功能"
 
@@ -150,7 +136,6 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 
 1. -i yf01,dbl01,cq02 过滤机房名称,多个可用逗号隔开.(过滤是说去除)
 2. -I JX/TC  过滤逻辑机房,配置在~/.pdo/pdo.conf 中(自定义都可以)
-3. --host= 指定host访问 主要适用ORP 一台物理机器上多个相同app的容器场景,只能配合-a/-p使用.
 
 配置文件中: 
 
@@ -233,7 +218,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ### 使用管道方式
 
 ```
-    cat godir/1.list | pdo2 -r 2 "pwd"
+    cat godir/1.list | pdo -r 2 "pwd"
     >>>> Welcome zhangjian12...
     yf-xxx-pre01.vm          -/home/work/xxx001    yf-xxx-app01.yf01        -/home/work/xxx001
     yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/
@@ -244,7 +229,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 使用数据库app方式,以xxxtest app为例,cmd为缩写命令= bash bin/xxxControl.sh N%%N%%N%%restart
 
 ```
-    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest cmd restart
+    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest cmd restart
     >>>> Welcome zhangjian12...
     yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
     #--Total--#  2
@@ -255,7 +240,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ### 使用idc过滤
 
 ```
-    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest -i yf01 cmd restart 
+    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest -i yf01 cmd restart 
     >>>> Welcome zhangjian12...
     dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app17.m1          -/home/work/xxx001
      #--Total--#  2
@@ -266,7 +251,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ### 使用逻辑机房过滤
 
 ```
-    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest  -I JX cmd restart
+    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest  -I JX cmd restart
     >>>> Welcome zhangjian12...
     m1-xxx-app17.m1          -/home/work/xxx001    m1-xxx-app25.m1          -/home/work/xxx001
    
@@ -280,7 +265,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 使用带-o 指定输出目录,将不会再打印在屏幕上,主要是对grep日志这种需求使用.反之就会输出在屏幕上.
     
  ```  
-    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest  -o xxxout "pwd"
+    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest  -o xxxout "pwd"
     >>>> Welcome zhangjian12...
     yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
    
@@ -297,7 +282,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ### 超时killed进程
 
 ```
-    work@yf-xxx-apollo.yf01:godir$ pdo2 -a xxxtest -t 1s -r 3 "cat log/ral-zoo.log"
+    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest -t 1s -r 3 "cat log/ral-zoo.log"
     >>>> Welcome zhangjian12...
     yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
      #--Total--#  26
@@ -313,7 +298,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ### copy文件
 
 ```
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo2 copy get.sh /tmp/
+    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo copy get.sh /tmp/
     >>>> Welcome zhangjian12...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work
@@ -442,7 +427,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ```
 执行
 ```    
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo2 script t.sh
+    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo script t.sh
     >>>> Welcome zhangjian12...
     yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
     yf-xxx-upload02.yf01     -/home/work
@@ -480,7 +465,7 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
         第一步操作:  yf-yyy-redis40.yf01为主 --> cq02-yyy-redis80.cq02 
 
         #命令
-        #cat 1.list | pdo2 -r 5 -y -show row  -match "success" "tail -f log/redis.log"
+        #cat 1.list | pdo -r 5 -y -show row  -match "success" "tail -f log/redis.log"
         > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:51 * Slave ask for new-synchronization  //被要求同步 
         > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:56:58 * (non critical): Master does not understand REPLCONF listening-port: Reading from master: Connection timed out
         > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Slave ask for synchronization
@@ -518,3 +503,5 @@ Usage: ./pdo2 [input control][thread control] [output control][subcommand] <cont
 ```
 
 还有更多的组合,可以找实验.
+
+

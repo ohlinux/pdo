@@ -18,7 +18,6 @@ import (
 	"time"
 
 	log "github.com/cihub/seelog"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/robfig/config"
 )
 
