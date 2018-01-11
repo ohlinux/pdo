@@ -1,0 +1,36 @@
+log:
+   path: ./logs
+   backup: 7
+   maxfile: 10000
+   level: info
+template:
+   - temp1: /tmp/tmp1.sh
+shortcmd:
+   - restart: echo "restart command"
+plugins:
+   - sfns
+   - cmdb
+   - dns
+input:
+#   from: file
+   format: row
+   regex: ""
+output:
+   format: text # json yaml
+#  to: std  # stderr stdout dir file file-append
+#   regex: ""
+   noColor: false
+   summary: true
+   header: true
+parallel:
+   numbers: 1
+   overTime: 30s
+   intervalTime: 0s
+   yes: false
+   ask: 10
+auth:
+   privateKey: /Users/ajian/.ssh/id_rsa
+   knownHosts: /Users/ajian/.ssh/known_hosts
+   user: ""
+   passwd: ""
+   port: "22"

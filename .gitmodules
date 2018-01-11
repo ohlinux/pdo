@@ -1,6 +1,0 @@
-[submodule "vendor/github.com/cihub/seelog"]
-	path = vendor/github.com/cihub/seelog
-	url = http://github.com/cihub/seelog.git
-[submodule "vendor/github.com/robfig/config"]
-	path = vendor/github.com/robfig/config
-	url = http://github.com/robfig/config.git

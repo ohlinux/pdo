@@ -1,0 +1,49 @@
+{
+  "log": {
+    "path": "./logs", 
+    "maxfile": 10000, 
+    "backup": 7, 
+    "level": "info"
+  }, 
+  "auth": {
+    "knownHosts": ".ssh/known_hosts", 
+    "passwd": "", 
+    "privateKey": ".ssh/id_rsa", 
+    "user": ""
+  }, 
+  "shortcmd": [
+    {
+      "restart": "echo \"restart command\""
+    }
+  ], 
+  "plugins": [
+    "sfns", 
+    "cmdb", 
+    "dns"
+  ], 
+  "output": {
+    "regex": "", 
+    "header": true, 
+    "to": "std", 
+    "format": "txt", 
+    "noColor": false, 
+    "summary": true
+  }, 
+  "template": [
+    {
+      "temp1": "/tmp/tmp1.sh"
+    }
+  ], 
+  "parallel": {
+    "ask": 10, 
+    "overTime": "10s", 
+    "intervalTime": "5m", 
+    "numbers": 1, 
+    "true": false
+  }, 
+  "input": {
+    "regex": "", 
+    "from": "file", 
+    "format": "row"
+  }
+}

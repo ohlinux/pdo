@@ -1,507 +1,209 @@
-批量执行工具PDO,主要是解决减少批量执行的繁锁,更安全便捷的操作命令.依赖ssh的信任密钥,不需要安装agent等服务.定位比较简单,不复杂化. 
+# PDO批量工具
 
-借鉴了pssh(python) onall(perl)等批量工具,比后来出现的Ansible Salt更简单. 定位简单,功能不简单.得易于golang和多年的一线运维经验.
 
-优势: 
+### 功能
 
-1. 速度快.
-2. 易于操作.
-3. 可以通过组合不同的参数解决大多数的问题. 
+* [x] 直接执行命令
+* [x] 本地命令执行
+* [x] 远程命令执行
+* [x] 复制命令
+* [x] 返回错误号
+* [x] 输出多种格式
+* [x] 可以指定用户密码或者私钥
+* [ ] 列计算
+* [ ] diff
+* [ ] md5
+* [ ] 输入机器列表正则
+* [ ] 输入列表优化列表 在相同的主机不同的path的情况下.
+* [ ] 彩色终端效果.
+* [ ] 安全命令过滤.
+* [ ] 日志信息增强.
+* [ ] color自定义
+* [x] 支持tail -f 的命令关闭
+* [x] 支持自定义询问间隔
+* [x] 支持超时,并发度,间隔等控制功能.
 
-* 工具名称: pdo(parallel do something) 
-* pdo V1 因为还有些地方在使用所以,将version 1的文档链接起来. [pdov1.md](pdov1.md)
-* pdo V2 是最新的工具,取消了原来依赖ofind的方式,以下主要是介绍pdo这个工具.
-* pdo V2 优化了输出,可以时时写入,可以超时中断,区分屏幕输出与文件写入,屏幕输出为一次性输出,文件写入为时时写入.
-* pdo V2 优化了并发输出,可以让并发速度更快,并且加入了很多其它复杂的功能.
-
-* 更新历史
-
-```
-// Version 2.0.20140821 增加print打印列表和prev提前显示的功能
-// Version 2.0.20141121 fix bugs: -y 第一个job会先执行完才继续 ; ssh 输出的warning ; -o 输出文件冲突的问题; -o 失败不显示状态.
-// Version 2.0.20151228 增加bns noahTree -b 的input
-// Version 2.0.20151231 增加指定User Name
-// Version 2.0.20160130 retry -R 优先及最高. setup完善.
-// Version 2.0.20160202 -bns -noah 增加多个的支持,中间用逗号分割.
-// Version 2.0.20161007 增加connect failed的判断.
-// Version 2.0.20161017 增加scrpit参数
-```
-
-## 安装
-
-### 依赖
-
-1. 需要有一个中控机与被管理机器建立了无密码的密钥关系.
-2. 需要有go语言的环境,进行编译安装.这里没有提供bin文件.
-3. 自己所测试的环境有,centos,Redhat,osx.
-
-### 编译
-
-先获取依赖的第三方库: 
-
-    go get github.com/cihub/seelog
-    go get github.com/robfig/config
-   
-
-安装go 环境.
-
-    go build pdo.go
-    
-    
-### 配置
- 
- 第一次创建配置文件,会创建~/.pdo/pdo.conf ~/.pdo/log.xml 两个文件. 可以进行修改定制.
- 
- 
- 	pdo setup 
-  
-    
-###  Pdo Help 
+### help
 
 ```
-Usage: pdo [input control][thread control] [output control][subcommand] <content>
+PDO is a simple tool that parallel do something using ssh , no agent.
 
-  input control:
-    -f <file>           from File "HOST PATH".
-    -R                  from last failure list.
-    default             from pipe,eg: cat file | pdo
+Usage:
 
-  output control:
+  pdo  [flags]
+
+  pdo <input control> [thread control] [output control] [subcommand] <function> [Argument]
+
+Available Commands:
+  cal         A brief description of your command
+  console     A brief description of your command
+  copy        copy file or directory to destination
+  help        Help about any command
+  md5         A brief description of your command
+  print       A brief description of your command
+  script      A brief description of your command
+  setup       A brief description of your command
+  tail        A brief description of your command
+  version     Print the version number of pdo
+
+Flags:
+      --ask int                  thread control,ask every numbers,default is 0 means no ask expect the first one
+      --auth-knownHosts string   authentication ,specified known_hosts file (default "/.ssh/known_hosts")
+  -p, --auth-passwd string       authentication ,specified password
+      --auth-priv string         authentication ,specified private key file (default "/.ssh/id_rsb")
+  -u, --auth-user string         authentication ,specified user name
+  -r, --concurrent int           thread control , concurrent processing (default 1)
+  -c, --config string            config file (default "/.pdo/pdo.yml")
+      --header                   output header information  (default true)
+  -h, --help                     help for pdo
+  -f, --in-file string           input from file
+  -F, --in-format string         input format eg:json yaml  (default "row")
+  -R, --in-last-fail             input from last failure list
+  -S, --in-last-success          input from last success list
+  -E, --in-regex string          input host regex to filter
+      --log-backup int           log ,log backup number files (default 7)
+      --log-level string         log , output log level (default "info")
+      --log-maxfile int          log , max value for each log file (default 10000)
+      --log-path string          log ,log output directory (default "./logs")
+      --out string               output format eg: json yaml row  (default "text")
+  -o, --out-directory string     output save in directory
+      --out-file string          output save to new file
+      --out-file-append string   output append to a file
+      --out-nocolor              output no color
+      --out-regex string         output highlight by regular
+  -q, --quiet                    output quiet mode , no summary and header information
+      --summary                  output summary information (default true)
+  -T, --time-inter duration      thread control,interval time between concurrent jobs
+  -t, --time-over duration       thread control,over the time ,kill process. (default 5m0s)
+  -y, --yes                      thread control,input yes when ask
+
+Examples:
+  cat host.list | pdo -r 10 "pwd"
+
+Use "pdo [command] --help" for more information about a command.
+
+```
+
+### 结构
+
+v2
+
+```
+Usage: pdo2 [input control][thread control] [output control][subcommand] <content>
+```
+
+v3
+
+```
+Usage: pdo2 <input control> [thread control] [output control] [subcommand] <function> [Argument]
+```
+
+
+#### input control:
+
+```
+    -f  --in-file <file>    from File name.
+    -R  --in-last-fail      from last failure list.
+     	--in-last-success		  from last Success list.
+    -P 	--in-plugin <plugin name> <args> from plugin list
+    default             from pipe,eg: cat file | pdo2
+    --in-format      yaml or json,default row by row .
+    -E   --in-regex         机器列表输入正则
+```
+
+
+#### output control:
+
+
+```
     default             display after finish.
-    -show <row>         display line by line.
-    -o <dir>            save to directory.
+    --show <option> --out <option>
+    							Print the output from the
+    							ssh command using the
+								specified outputter. The
+								builtins are 'key', 'yaml',
+                        'overstatestage',
+                        'newline_values_only',
+                        'txt', 'raw',
+                        'no_return', 'virt_query',
+                        'compact', 'json',
+                        'highstate', 'nested',
+                         'quiet', 'pprint'.
+    -o  --out-directory=OUTPUT_DIRECTORY         save to directory for every host.
+    --out-file=OUTPUT_FILE
+                        Write the output to the specified file.
+    --out-file-append,
+                        Append the output to the specified file.
+    --out-regex         Display output  highlight by regular
+    --out-no-color      Disable all colored output.
+    --summary 			汇总信息 默认打开
+    --term  		   彩色终端
+    -q    --quiet   quiet mode ,no summary and no header information.
+    --header        头部信息 默认打开
+```
 
-  thread control:
+
+#### thread control:
+
+```
     -r <int>            concurrent processing ,default 1.
     -t <10s>            over the time ,kill process.
     -T <1m>             Interval time between concurrent programs.
-    -y                  default need input y .
-    -q                  quiet mode , not display the head infomation.
+    -y                  default need input y at the first host.
+    --ask  <int>        ask every numbers.default no ask .
+```
 
-  subcommand :
+#### configure:
+
+```
+-c --config <file>   specified configure file . default ~/.pdo/pdo.conf
+```
+
+#### subcommand :
+
+##### Operation subcommand
+
+```
     copy <file> <destination>   copy file to remote host.
-    script <script file>        execute script file on remote host.
-    cmd <config shortcmd>       use shortcmd in the pdo.conf.
-    tail <file>                 mulit tail -f file .
-    md5sum <file>               get md5sum file and count md5.
+    script <script file> <args>     execute script file on remote host.
+    cmd <config shortcmd>       use short cmd in the pdo.conf.
+    tailf <file>                  tail -f file . display row by row ,support ctrl+c kill remote tail command
+    console         enter in console interface
+```
+
+##### Summary subcommand
+
+```
+    md5 <file>               md5sum file and count md5.
+    cal <sum> <avg1> 			Column calculation  sum avg
+```
+
+#### basic subcommand
+
+```
     help <subcommand>           get subcommand help.
     print                       print host list. hostname path.
     version                     get the pdo version.
-    setup                       setup the configuration at the first time .[not finished]
-    conf                        save the used args.[not finished]
-
-  other :
-    -u  <username>  	Specifies the remote user .
-
-  Examples:
-  ## the first time , setup pdo conf pdo.conf and log.xml
-    pdo setup
-  ## simple ,read from pipe.
-    cat host.list | pdo "pwd"
-  ## -show row ,show line by line
-  ## copy files
-    pdo -f host.list copy 1.txt /tmp/
-  ## excute script files
-    pdo -f host.list script test.sh
-  ## local command
-    pdo -f host.list "scp a.txt {{.Host}}:{{.Path}}/log/"
-  ## Specifies the user
-    pdo -u root -f host.list -r 10 "pwd"
+    setup  <directory>          setup the configuration at the first time .default  directory ~/.pdo
 ```
-
-## pdo 结构
-
-```Usage: pdo [input control][thread control] [output control][subcommand] <content>```
-
-分为四部分:
-
-* input control 输入来源及控制,主要是不同的列表输入方式与控制 .
-* thread control 并发线程控制
-* output contorl 不同的输出方式
-* [subcommand] <content> 命令部分 可以使用subcommand 二级命令 也可以直接使用命令 直接使用命令使用引号括起来.
-
-**注意点: 所有的控制参数需要在二级命令之前,如果在命令之后,将失去作用.**
-
-[pdo图](http://gitlab.baidu.com/zhangjian12/pdo/blob/master/PDO%E5%B7%A5%E5%85%B7.png)
-
-##  input control 输入
-
-获取机器列表和相对应的路径有三种途径.
-
-1. -f 文件,host的列表文件,可以是一列,也可以是两列有相关的目录依赖.后面有例子.
-3. 标准输入 cat 1.host | pdo
-4. -R当使用的时候,使用的是上次失败的列表.详细查看例子"Retry功能"
-
-###  输入列表过滤
-
-1. -i yf01,dbl01,cq02 过滤机房名称,多个可用逗号隔开.(过滤是说去除)
-2. -I JX/TC  过滤逻辑机房,配置在~/.pdo/pdo.conf 中(自定义都可以)
-
-配置文件中: 
+#### Authentication Options:
 
 ```
-        [IDC]
-        JX:yf01,cq01,dbl01,ai01
-        TC:cq02,tc,m1,db01
+    --auth-priv=SSH_PRIV     set ssh private key file ,default ~/.ssh/id_rsa
+    -u --auth-user=SSH_USER     set the default user to attempt to use when authenticating, default current user
+    --auth-passwd=SSH_PASSWD
+                        set the default password to attempt to use when authenticating default null, if set password to instand of privet key
 ```
 
-## output control 输出控制
-
-输出方式有三种:
-
-* 默认是事后输出,只有等远程目标机器执行完所有的请求才会输出标准输出.
-* -o <dir> 是将标准输出保存为按host的文件,如果目录下面存在相同的host 会在原来的基础上加1 如: cq02-xxx-app001.cq02_1
-* -show <row>  按行输出,将标准输出添加上host标签 按行进行输出. 
-* -show <row> -match <string> 按行输出可以-match 字符串,高亮显示 .
-
-## thread control 线程控制 
-
-线程控制主要是pdo进程及线程并发度,超时相关的控制 .
-
-*    -r <int>       线程并发度控制,默认是1, rd有最大上限.
-*    -t <10s>      超时控制,如果超时将会有killed over time的提示.输入时间带单位,如10s(10秒),5m(5分) ,1h(1小时)
-*    -T <1m>        间隔控制,主要是线程之间或者并发度之间的时间控制,有点类似在命令里面输入sleep ,区别就是 使用-T 输出是立即输出的屏幕,使用sleep 是sleep之后返回的.
-*   -y                不使用-y,默认是需要进行命令和单机确认.
-*   -q                主要是quiet模式,不显示头部信息.
-    
-
-## subcommand : 子命令
-
-二级子命令,主要是封装了很多功能,可以简单直接的使用. 
-
-```    
-*  copy <file> <destination>   复制文件 可以文件也可以是目录.支持相对和绝对路径.
-*  script <script file>         将本地的一个脚本,在远程执行.
-*  cmd <config shortcmd>       短命令,主要是用于常用复杂命令,可以将短命令配置在pdo.conf中.
-*  tail <file>                 相当于mulit tail -f file . 会在一个屏幕同时输出多个终端的内容,建议不要对大日志文件里面操作.
-*  md5sum <file>              查看某个文件的md5值,并且进行统计.
-*  help <subcommand>           get subcommand help. 子命令help 暂时还无.
-*  version                     get the pdo version.
-*  setup                       setup the configuration at the first time .[not finished]
-*  conf                        save the used args.[not finished]
-```
-        
-## pdo应用举例
-
-### 配置文件
+#### OUTPUT CONTENT:
 
 ```
-     [PDO]
-     Log:/home/work/.pdo/log/pdo.log  //日志配置
-
-     [Mysql] //数据库配置
-     Host:st01-xxx-con00.st01
-     Port:3306
-     DBname:xxx
-     User:rd
-     Pass:MhxzKhl
- 
-     [IDC] //过滤物理idc/或者机器名后缀
-     JX:yf01,cq01,dbl01,ai01
-     TC:cq02,tc,m1,db01
- 
-     [CMD] //短命令
-     restart: bash bin/xxxControl.sh N%%N%%N%%restart
+web249:
+    ----------
+    retcode:
+        0
+    stderr:
+    stdout:
+        abc
 ```
-
-### host列表文件
-
-机器列表主要是两列,第一列必需有为host,第二列如果存在必需是路径 可以是相对和绝对路径.
-
-```
-    cat godir/1.list  
-    yf-xxx-pre01.vm /home/work/xxx001
-    yf-xxx-app01.yf01 /home/work/xxx001
-    yf-xxx-app02.yf01 /home/work/xxx001
-```
-
-### 使用管道方式
-
-```
-    cat godir/1.list | pdo -r 2 "pwd"
-    >>>> Welcome zhangjian12...
-    yf-xxx-pre01.vm          -/home/work/xxx001    yf-xxx-app01.yf01        -/home/work/xxx001
-    yf-xxx-app02.yf01        -/home/work/xxx001    yf-xxx-app03.yf01        -/home/work/
-```
-    
-### 使用app方式与简写命令
-
-使用数据库app方式,以xxxtest app为例,cmd为缩写命令= bash bin/xxxControl.sh N%%N%%N%%restart
-
-```
-    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest cmd restart
-    >>>> Welcome zhangjian12...
-    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
-    #--Total--#  2
-    #---CMD---#  bash bin/xxxControl.sh N%%N%%N%%restart
-    Continue (y/n):
-```
-    
-### 使用idc过滤
-
-```
-    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest -i yf01 cmd restart 
-    >>>> Welcome zhangjian12...
-    dbl-xxx-app0109.dbl01    -/home/work/xxx003    m1-xxx-app17.m1          -/home/work/xxx001
-     #--Total--#  2
-    #---CMD---#  bash bin/xxxControl.sh N%%N%%N%%restart
-    Continue (y/n):
-```
-    
-### 使用逻辑机房过滤
-
-```
-    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest  -I JX cmd restart
-    >>>> Welcome zhangjian12...
-    m1-xxx-app17.m1          -/home/work/xxx001    m1-xxx-app25.m1          -/home/work/xxx001
-   
-    #--Total--#  2
-    #---CMD---#  bash bin/xxxControl.sh N%%N%%N%%restart
-    Continue (y/n):
-```
-    
-###  目录文件输出
-
-使用带-o 指定输出目录,将不会再打印在屏幕上,主要是对grep日志这种需求使用.反之就会输出在屏幕上.
-    
- ```  
-    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest  -o xxxout "pwd"
-    >>>> Welcome zhangjian12...
-    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
-   
-    #--Total--#  25
-    #---CMD---#  pwd
-    Continue (y/n):y
-    go on ...
-    [1/25] yf-xxx-app01.yf01  [SUCCESS].
-    Continue (y/n):y
-    go on ...
-    [2/25] yf-xxx-app02.yf01  [SUCCESS].
- ```
-    
-### 超时killed进程
-
-```
-    work@yf-xxx-apollo.yf01:godir$ pdo -a xxxtest -t 1s -r 3 "cat log/ral-zoo.log"
-    >>>> Welcome zhangjian12...
-    yf-xxx-app01.yf01        -/home/work/xxx001    yf-xxx-app02.yf01        -/home/work/xxx001
-     #--Total--#  26
-    #---CMD---#  cat log/ral-zoo.log
-    Continue (y/n):y
-    go on ...
-    [1/26] yf-xxx-app01.yf01  [Time Over KILLED].
-    Continue (y/n):y
-    go on ...
-    [2/26] yf-xxx-app04.yf01  [Time Over KILLED].
-```
-        
-### copy文件
-
-```
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo copy get.sh /tmp/
-    >>>> Welcome zhangjian12...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work
-
-    #--Total--#  3
-    #---CMD---#  get.sh --> /tmp/
-    Continue (y/n):y
-    go on ...
-    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
-    
-    Continue (y/n):y
-    go on ...
-    [2/3] yf-xxx-upload01.yf01  [SUCCESS].
-   
-    
-    //检查下文件 
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo "ls /tmp/get.sh"
-    >>>> Welcome zhangjian12...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work
-    
-    #--Total--#  3
-    #---CMD---#  ls /tmp/get.sh
-    Continue (y/n):y
-    go on ...
-    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    Continue (y/n):y
-    go on ...
-    [2/3] yf-xxx-upload01.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    [3/3] yf-xxx-upload02.yf01  [SUCCESS].
-    /tmp/get.sh
-```
-
-### Retry功能
-
-这次多加两台服务器,有两台是没有这个脚本文件的.
-
-```
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -5  | pdo "ls /tmp/get.sh"
-    >>>> Welcome zhangjian12...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
-    yf-xxx-upload04.yf01     -/home/work
-
-    #--Total--#  5
-    #---CMD---#  ls /tmp/get.sh
-    Continue (y/n):y
-    go on ...
-    [1/5] yf-xxx-upload05.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    Continue (y/n):y
-    go on ...
-    [2/5] yf-xxx-upload01.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    [3/5] yf-xxx-upload02.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    [4/5] yf-xxx-upload03.yf01  [FAILED].
-    ls: /tmp/get.sh: No such file or directory
-    
-    [5/5] yf-xxx-upload04.yf01  [FAILED].
-    ls: /tmp/get.sh: No such file or directory
-    
-    //使用-R 就可以直接拿到上一次执行失败的列表.
-    work@yf-xxx-apollo.yf01:upload_server$pdo -R "ls /tmp/get.sh"
-    >>>> Welcome zhangjian12...
-    yf-xxx-upload03.yf01     -/home/work           yf-xxx-upload04.yf01     -/home/work
-    
-    
-    #--Total--#  2
-    #---CMD---#  ls /tmp/get.sh
-    Continue (y/n):y
-    go on ...
-    [1/2] yf-xxx-upload03.yf01  [FAILED].
-    ls: /tmp/get.sh: No such file or directory
-    
-    //如果是使用的ctrl+C中断了列表,-R会记录未执行完(包括已经执行但失败的列表)
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -5  | pdo  -T 10s "ls /tmp/get.sh"
-    >>>> Welcome zhangjian12...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
-    yf-xxx-upload04.yf01     -/home/work
-
-    #--Total--#  5
-    #---CMD---#  ls /tmp/get.sh
-    Continue (y/n):y
-    go on ...
-    [1/5] yf-xxx-upload05.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    Continue (y/n):y
-    go on ...
-    [2/5] yf-xxx-upload01.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    ^Cwork@yf-xxx-apollo.yf01:upload_server$ pdo -R "ls /tmp/get.sh"
-    >>>> Welcome zhangjian12...
-    yf-xxx-upload02.yf01     -/home/work           yf-xxx-upload03.yf01     -/home/work
-    yf-xxx-upload04.yf01     -/home/work
-    
-    #--Total--#  3
-    #---CMD---#  ls /tmp/get.sh
-    Continue (y/n):y
-    go on ...
-    [1/3] yf-xxx-upload02.yf01  [SUCCESS].
-    /tmp/get.sh
-    
-    Continue (y/n):
-```
- 
-### script 脚本执行功能
-
-```
-    work@yf-xxx-apollo.yf01:upload_server$ cat t.sh
-    #!/bin/bash
-
-    cd /tmp/ && pwd
-    echo "test"
-    touch /tmp/t.log
-```
-执行
-```    
-    work@yf-xxx-apollo.yf01:upload_server$ get_instance_by_service picupload.xxx.all | head -3  | pdo script t.sh
-    >>>> Welcome zhangjian12...
-    yf-xxx-upload05.yf01     -/home/work           yf-xxx-upload01.yf01     -/home/work
-    yf-xxx-upload02.yf01     -/home/work
-
-    #--Total--#  3
-    #---CMD---#  Script: t.sh
-    Continue (y/n):y
-    go on ...
-    [1/3] yf-xxx-upload05.yf01  [SUCCESS].
-    /tmp
-    test
-```
-        
-###  行显示与匹配
-
-这个功能有两种使用场景:
-
-1. 有点类似multi tail 可以实现同时tail多个日志,显示在一个屏幕内,而且可以对match的字符串进行高亮显示.
-2. 如果输出是单行输出,没有状态显示会显示得加的美观和可参考性.
-
-所以这种显示方式取决于时间的先后顺序,交错输出.
-
-拿redis的迁移过程为例子: 
-
-> redis迁移至少有原来的一主一从,新主和新从.在迁移的过程中需要同时观察四台服务器的变化.如果是每次ssh四台服务器tail 日志是很麻烦而且容易出错.
-
-现在使用pdo命令:
- 
- ```       
-        //操作的主机列表1.list
-        tc-yyy-redis40.tc /home/yyy/redis-ting-listen-shard3   //old master 
-        cq02-yyy-redis80.cq02 /home/yyy/redis-ting-listen-shard3 //new master 
-        yf-yyy-redis40.yf01 /home/yyy/redis-ting-listen-shard3 //old slave 
-        jx-yyy-redis80.jx /home/yyy/redis-ting-listen-shard3  //new slave 
-        第一步操作:  yf-yyy-redis40.yf01为主 --> cq02-yyy-redis80.cq02 
-
-        #命令
-        #cat 1.list | pdo -r 5 -y -show row  -match "success" "tail -f log/redis.log"
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:51 * Slave ask for new-synchronization  //被要求同步 
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:56:58 * (non critical): Master does not understand REPLCONF listening-port: Reading from master: Connection timed out
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Slave ask for synchronization
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Starting BGSAVE for SYNC
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:56:58 * Background saving started by pid 22855
-        > yf-yyy-redis40.yf01      >> [22855] 06 Jan 13:58:31 * DB saved on disk   //dump到磁盘
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:58:31 * Background saving terminated with success
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:58:31 * MASTER <-> SLAVE sync: receiving 1868940396 bytes from master  //从接收到主的文件
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 13:58:47 * MASTER <-> SLAVE sync: Loading DB in memory //将接收到的文件加载到内存
-        > yf-yyy-redis40.yf01      >> [11523] 06 Jan 13:58:47 * Synchronization with slave succeeded  //文件同步成功
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 # Update masterstarttime[1382324097] after loading db
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * AA: see masterstarttime: ip[10.36.114.56], port[9973], timestamp[1382324097]
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * Write aof_global_offset[92961804447] to new aof_file[46] success
-        > cq02-yyy-redis80.cq02    >> [14752] 06 Jan 14:01:21 * MASTER <-> SLAVE sync: Finished with success //slave完成主从同步,说明第一步已经结束.
-
-```
-
-说明:
- 
-1.  因为是tail -f 是不会主动退出命令,所以需要使用-y 和使用-r 来增加并发量,不然会先进行单台显示 ,而不会显示后面的.
-2.  match是匹配字符 串,暂时不支持正则,会进行高亮显示.红色显示.
-3.  -show现在只支持row这一种方式,默认方式还是原来的缓存输出方式.  
-
-以下是一个测试脚本:随机打印数字 1.sh
-
-```
-        #!/bin/bash
-        for x in `seq 1 10` ; do
-            echo $x
-            sleep $[ ( $RANDOM % 4 )  + 1 ]s
-        done 
-        
-         //可以使用如下命令:
-       # cat 1.list | pdo -r 5 -y -show row  -match "5" -e 1.sh
-```
-
-还有更多的组合,可以找实验.
-
 

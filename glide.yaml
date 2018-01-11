@@ -1,0 +1,14 @@
+package: github.com/ohlinux/pdo
+import:
+- package: github.com/cihub/seelog
+  version: v2.6
+- package: github.com/go-sql-driver/mysql
+  version: v1.3
+- package: github.com/mitchellh/go-homedir
+- package: github.com/robfig/config
+- package: github.com/spf13/cobra
+  version: v0.0.1
+- package: github.com/spf13/viper
+  version: v1.0.0
+- package: golang.org/x/crypto/ssh
+- package: gopkg.in/yaml.v2
