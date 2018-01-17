@@ -10,7 +10,7 @@ import (
 	"strings"
 
 
-	"gitlab.sftcwl.com/sf-op/pdov3/pdo"
+	"github.com/ohlinux/pdo/pkg/pdo"
 
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"

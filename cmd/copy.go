@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"gitlab.sftcwl.com/sf-op/pdov3/pdo"
+	"github.com/ohlinux/pdo/pkg/pdo"
 )
 
 // copyCmd represents the copy command

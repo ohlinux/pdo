@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"gitlab.sftcwl.com/sf-op/pdov3/cmd"
+	"github.com/ohlinux/pdo/cmd"
 )
 
 func main() {
