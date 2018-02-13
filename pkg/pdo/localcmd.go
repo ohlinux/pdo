@@ -8,7 +8,7 @@ import (
 	"io"
 //	"log"
 	"syscall"
-//	"fmt"
+	"fmt"
 )
 
 func (pdo *Pdo)ParseCmd(job HostList,cmd string)(string, error) {
@@ -118,8 +118,8 @@ func (pdo *Pdo)ExeLocalCmd(job *Job,command string,quiet bool)*appError{
 
 	if quiet {
 		if result.RetCode != ResultSuccess{
-		return nil
-			//return &appError{fmt.Errorf("run failed, %+v\n",execCmd),"Can't show output row by row ",ResultStartFailed}
+		//return nil
+		return &appError{fmt.Errorf("run failed, %+v\n",execCmd),"Can't show output row by row ",ResultStartFailed}
 		}
 	}
 
