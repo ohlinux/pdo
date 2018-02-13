@@ -116,7 +116,7 @@ func (pdo *Pdo)connect(user, password, host string, port string ) (*ssh.Session,
 	return session, nil
 }
 
-func (pdo *Pdo)ExeRemoteCmd(job *Job,quiet bool)error{
+func (pdo *Pdo)ExeRemoteCmd(job *Job,command string , quiet bool)*appError{
 	var out ,outerr bytes.Buffer
 	var result JobResult
 	var err error
@@ -125,29 +125,29 @@ func (pdo *Pdo)ExeRemoteCmd(job *Job,quiet bool)error{
 
 	session, err := pdo.connect(list.User, list.Passwd, list.Host, list.Port)
 	if err!=nil {
-		return err
+		return &appError{err,"Can't connect remote server",ResultConnectFailed}
 	}
 	defer session.Close()
 
 	jobstring := pdo.jobstring(job)
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return err
+		return &appError{err,"Can't create stdout",ResultStartFailed}
 	}
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return err
+		return &appError{err,"Can't create stderr",ResultStartFailed}
 	}
 
-	if pdo.Command.Remoted {
-		err = session.Start(shellCmd(pdo.Command.Execmd))
+	if pdo.Command.Kill{
+		err = session.Start(shellCmd(command))
 	}else{
-		err = session.Start(pdo.Command.Execmd)
+		err = session.Start(command)
 	}
 
 	if err!=nil {
-		return err
+		return &appError{err,"Can't start to run command",ResultStartFailed}
 	}
 
 	////直接输出

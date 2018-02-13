@@ -18,20 +18,41 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/ohlinux/pdo/pkg/pdo"
+	"strings"
 )
 
-// scriptCmd represents the script command
+// copyCmd represents the copy command
 var scriptCmd = &cobra.Command{
 	Use:   "script",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "execute local script in remote server",
+	Long: `execut local script file , any format. step 1: copy the local file to remote server , step 2: execute the file.`,
+	Example: `pdo script example.sh arg1 arg2` ,
+	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("script called")
+		// command
+		cmdArgs:=cmd.Flags().Args()
+		cmdArgstr:=fmt.Sprintf("script %s %s",cmdArgs[0],strings.Join(cmdArgs[1:]," "))
+		remoteFile:=fmt.Sprintf("/tmp/pdo_script.%s",pdo.PID)
+		remoteExe:=fmt.Sprintf("chmod +x %s && %s %s || cd /tmp/ && rm -f %s",remoteFile,remoteFile,strings.Join(cmdArgs[1:]," "),remoteFile)
+		copyCmd:=fmt.Sprint("rsync -e \"ssh -q -p {{.Port}} -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3\" ",cmdArgs[0]," {{.User}}@{{.Host}}:",remoteFile)
+		newpdo.Command=pdo.Command{
+			Inputcmd: cmdArgstr,
+			Display: cmdArgstr,
+			Execmd: remoteExe,
+			Args: cmdArgs[1:],
+			PreCmd: copyCmd,
+		}
+
+		newpdo.PrepareInput(cmd ,args)
+		newpdo.PrepareOutput(cmd ,args)
+
+		//todo: validate host list
+		//todo: filter host list
+		if err:=newpdo.CreateJobList();err!=nil {
+			fmt.Errorf("input host list fail %v",err)
+		}
+		newpdo.Run()
 	},
 }
 
@@ -42,9 +63,9 @@ func init() {
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// scriptCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// copyCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// scriptCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// copyCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

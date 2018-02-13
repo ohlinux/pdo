@@ -25,33 +25,28 @@ import (
 var copyCmd = &cobra.Command{
 	Use:   "copy",
 	Short: "copy file or directory to destination",
-	Long: `the command like rsync ,can copy file or directory, please notice file and directory different format.`,
+	Long: `the command like 'rsync -a',can copy file or directory, please notice file and directory different format.`,
 	Example: `pdo copy a.file /tmp/b.file` ,
 	Args: cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		// command
 		cmdArgs:=cmd.Flags().Args()
-
 		cmdArgstr:=fmt.Sprintf("copy %s --> %s",cmdArgs[0],cmdArgs[1])
-		//cmdArgstr:=strings.Join("copy ",cmdArgs[0],"to")
-		copyCmd:=fmt.Sprint("rsync -e \"ssh -q -p %s -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3\" ",cmdArgs[0]," %s@%s:",cmdArgs[1])
+		copyCmd:=fmt.Sprint("rsync -e \"ssh -q -p {{.Port}} -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=3\" ",cmdArgs[0]," {{.User}}@{{.Host}}:",cmdArgs[1])
 		newpdo.Command=pdo.Command{
 			Inputcmd: cmdArgstr,
 			Display: cmdArgstr,
 			Execmd: copyCmd,
 			Args: cmdArgs[1:],
 		}
-		fmt.Println(newpdo.Command)
 
 		newpdo.Command.Local = true
-
 		newpdo.PrepareInput(cmd ,args)
-
 		newpdo.PrepareOutput(cmd ,args)
 
 		//todo: validate host list
 		//todo: filter host list
-
+		fmt.Printf("pdo info : %+v\n",newpdo)
 		if err:=newpdo.CreateJobList();err!=nil {
 			fmt.Errorf("input host list fail %v",err)
 		}

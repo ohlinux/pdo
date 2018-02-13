@@ -14,13 +14,11 @@ import (
 
 func (pdo *Pdo)PrepareInput(cmd *cobra.Command, args []string) {
 
-
 	incmd:=make(map[string]string)
 	ins:=[]string{"in-format","in-file","in-last-fail","in-last-success","in-regex"}
 	for _,v:=range ins {
-		incmd[v]=cmd.PersistentFlags().Lookup(v).Value.String()
+			incmd[v]=cmd.Flags().Lookup(v).Value.String()
 	}
-
 
 	pdo.Input.Format=incmd["in-format"]
 	pdo.Input.Regex=incmd["in-regex"]
@@ -43,8 +41,7 @@ func (pdo *Pdo)PrepareOutput(cmd *cobra.Command, args []string) {
 	outcmd := make(map[string]string)
 	outs := []string{"out","out-directory", "out-file", "out-file-append", "out-regex"}
 	for _, v := range outs {
-		fmt.Println(v)
-		outcmd[v] = cmd.PersistentFlags().Lookup(v).Value.String()
+		outcmd[v] = cmd.Flags().Lookup(v).Value.String()
 	}
 
 	pdo.Output.Regex = outcmd["out-regex"]
@@ -87,6 +84,7 @@ func (pdo *Pdo)CreateJobList() error {
 
 	var source io.Reader
 	var err error
+	fmt.Println("from",pdo.Input.From)
 	if pdo.Input.From != "" {
 		source, err = os.Open(pdo.Input.From)
 		if err !=nil {

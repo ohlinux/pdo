@@ -12,7 +12,6 @@ import (
 
 func NewPdo(pdoMaster Pdo)Pdo{
 
-
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	return pdoMaster
 
@@ -110,26 +109,26 @@ func (pdo *Pdo) awaitCompletion(done <-chan struct{}, results chan JobResult, wo
 //job处理结果
 func (pdo *Pdo) processResults(results <-chan JobResult) {
 	jobfinish:=1
+
 	var status string
 	for result := range results {
 		switch result.RetCode {
-		case ResultSuccess:
-			status=StatusSuccess
-			pdo.Jobsinfo.Success++
-		case ResultTimeOverKilled:
-			status=StatusTimeOverKilled
-			pdo.Jobsinfo.TimeOver++
-		case ResultKillFailed:
-			status=StatusTimeOverKilledFailed
-			pdo.Jobsinfo.TimeOver++
-		case ResultConnectFailed:
-			status=StatusConnectFailed
-			pdo.Jobsinfo.ConnectFail++
-		default:
-			status=StatusDoFailed
-			pdo.Jobsinfo.ExeFail++
+			case ResultSuccess:
+				status=StatusSuccess
+				pdo.Jobsinfo.Success++
+			case ResultTimeOverKilled:
+				status=StatusTimeOverKilled
+				pdo.Jobsinfo.TimeOver++
+			case ResultKillFailed:
+				status=StatusTimeOverKilledFailed
+				pdo.Jobsinfo.TimeOver++
+			case ResultConnectFailed:
+				status=StatusConnectFailed
+				pdo.Jobsinfo.ConnectFail++
+			default:
+				status=StatusDoFailed
+				pdo.Jobsinfo.ExeFail++
 		}
-
 
 		if status==StatusSuccess {
 			//todo: add passwd ... and crypto
@@ -138,7 +137,7 @@ func (pdo *Pdo) processResults(results <-chan JobResult) {
 			pdo.CreateAppendFile(pdo.WorkEnv.FailFile, result.Jobname)
 		}
 
-		//todo: if format is row , how to add  进度显示
+		//todo: if format is row , how to add  progress
 		if pdo.Output.Format == FormatText || len(pdo.Output.Save) > 0{
 			if status==StatusSuccess {
 				fmt.Printf("[%d/%d] %s \033[34m [%s]\033[0m\n", jobfinish, pdo.Jobsinfo.Total, result.Jobname,status)
@@ -261,7 +260,7 @@ func (pdo *Pdo)displaySummary() {
 
 	info:=pdo.Jobsinfo
 
-	fmt.Printf("\n[INFO] Total:%d Success:%d Fail:%d TimeOver:%d Connect:%d\n",info.Total,info.Finished,info.ExeFail,info.TimeOver,info.ConnectFail)
+	fmt.Printf("\n[INFO] Total:%d Success:%d Fail:%d TimeOver:%d Connect:%d\n",info.Total,info.Success,info.ExeFail,info.TimeOver,info.ConnectFail)
 }
 
 //检查文件是否存在.
@@ -282,35 +281,40 @@ func (pdo *Pdo)jobstring(job *Job) string {
 
 //具体job处理过程
 func (pdo *Pdo) Do(job *Job) {
-	var err error
 
+	var apperr *appError
 	jobstring := pdo.jobstring(job)
 
-	// todo: copy command
-	//if pdo.Command.Copy != "" {
-	//	err=
-	//}
+	if apperr=pdo.PreDo(job,pdo.Command.PreCmd) ; apperr!=nil{
+		job.results <- JobResult{jobstring, apperr.Code, apperr.Message,apperr.Error.Error()}
+		return
+	}
+
 
 	if pdo.Command.Local {
-		err=pdo.ExeLocalCmd(job,false)
+		apperr=pdo.ExeLocalCmd(job,pdo.Command.Execmd,false)
 	}else{
-		err=pdo.ExeRemoteCmd(job,false)
+		apperr=pdo.ExeRemoteCmd(job,pdo.Command.Execmd,false)
 	}
 
-	if err!=nil {
-		job.results <- JobResult{jobstring, ResultStartFailed, "",err.Error()}
+	if apperr!=nil {
+		job.results <- JobResult{jobstring, apperr.Code, apperr.Message,apperr.Error.Error()}
 	}
+	pdo.PostDo()
 }
 
 
-func (pdo *Pdo)PreDo(cmd string) {
-
-	// prefix do  like copy
-
-
+func (pdo *Pdo)PreDo(job *Job,cmd string) *appError{
+	if pdo.Command.PreCmd == "" {
+		return nil
+	}
+	return pdo.ExeLocalCmd(job ,cmd,true)
 }
 
-func (pdo *Pdo)PostDo() {
+func (pdo *Pdo)PostDo() error {
+	if pdo.Command.PostCmd == "" {
+		return nil
+	}
 
-
+	return nil
 }

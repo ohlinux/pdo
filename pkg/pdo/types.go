@@ -110,12 +110,13 @@ type WorkEnv struct {
 type Command struct {
 	Display string `json:"display"`
 	Inputcmd    string `json:"inputcmd"`
+	PreCmd   string `json:precmd`
 	Execmd   string `json:"execmd"`
+	PostCmd string  `json:"postcmd"`
 	Args   []string `json:"args"`
     Copy    string  `json:"copy"`
     Local    bool `json:"local"`
-    //Remote   bool  `json:"remote"`
-    Remoted  bool `json:"remoted" description:"remoted will kill pid when ctrl+c ,eg: tail -f"`
+    Kill    bool `json:"kill" description:"remoted will kill pid when ctrl+c ,eg: tail -f"`
 }
 
 type Jobsinfo struct {
@@ -131,7 +132,6 @@ type Job struct {
 	jobname HostList
 	results chan<- JobResult
 	jobid   int
-//	joblocal bool
 }
 
 type JobResult struct {
@@ -147,4 +147,10 @@ type HostList struct {
 	User string `json:"user"` 
 	Port string `json:"port"`
 	Passwd string `json:"passwd"`
+}
+
+type appError struct {
+	Error   error
+	Message string
+	Code    int
 }

@@ -1,7 +1,6 @@
 package pdo
 
 import (
-//	"fmt"
 	"html/template"
 	"bytes"
 	"os/exec"
@@ -12,15 +11,15 @@ import (
 //	"fmt"
 )
 
-func (pdo *Pdo)ParseCmd(job HostList)(string, error) {
-	tmpl, err := template.New("pdo").Parse(pdo.Command.Inputcmd)
+func (pdo *Pdo)ParseCmd(job HostList,cmd string)(string, error) {
+	tmpl, err := template.New("pdo").Parse(cmd)
 	var tempBuf bytes.Buffer
 	err = tmpl.Execute(&tempBuf, job)
 	ExecCmd := tempBuf.String()
 	return  ExecCmd, err
 }
 
-func (pdo *Pdo)ExeLocalCmd(job *Job,quiet bool)error{
+func (pdo *Pdo)ExeLocalCmd(job *Job,command string,quiet bool)*appError{
 
 	var out ,outerr bytes.Buffer
 	var result JobResult
@@ -28,12 +27,11 @@ func (pdo *Pdo)ExeLocalCmd(job *Job,quiet bool)error{
 	var err error
 
 	list:=job.jobname
-	if pdo.Command.Local {
-		execCmd,err=pdo.ParseCmd(list)
+		execCmd,err=pdo.ParseCmd(list,command)
 		if err!=nil {
-			return err
+			return &appError{err,"Can't parse command",ResultStartFailed}
 		}
-	}
+
 
 	cmd := exec.Command("/bin/bash", "-s")
 	cmd.Stdin = bytes.NewBufferString(execCmd)
@@ -44,29 +42,29 @@ func (pdo *Pdo)ExeLocalCmd(job *Job,quiet bool)error{
 	//命令执行
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return &appError{err,"Can't create stdout",ResultStartFailed}
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return &appError{err,"Can't create stderr",ResultStartFailed}
 	}
 
 	err = cmd.Start()
 	if err!=nil {
-		return err
+		return &appError{err,"Can't start to run command",ResultStartFailed}
 	}
 
 	if len(pdo.Output.Save) != 0 {
 		for k,v:=range pdo.Output.Save {
 			if k == OutDirectory {
 				if err:=pdo.OutputSaveToDirectory(job.jobname.Host,v,job.jobid,stdout,stderr); err!=nil {
-					return err
+					return &appError{err,"Can't save output to directory",ResultStartFailed}
 				}
 			}
 			if k == OutFile || k == OutFileAppend{
 				if err:=pdo.OutputFormatRow(job.jobname.Host,stdout,pdo.Output.Regex,true); err!=nil{
-					return  err
+					return &appError{err,"Can't show output row by row ",ResultStartFailed}
 				}
 			}
 		}
@@ -74,8 +72,8 @@ func (pdo *Pdo)ExeLocalCmd(job *Job,quiet bool)error{
 		if pdo.Output.Format == FormatRow {
 			pdo.OutputFormatRow(job.jobname.Host, stdout, pdo.Output.Regex,false)
 		} else {
-			go io.Copy(&out, stdout)
-			go io.Copy(&outerr, stderr)
+				go io.Copy(&out, stdout)
+				go io.Copy(&outerr, stderr)
 		}
 	}
 
@@ -117,10 +115,15 @@ func (pdo *Pdo)ExeLocalCmd(job *Job,quiet bool)error{
 	}
 
 	result.Jobname=jobstring
-	if !quiet {
-		job.results <- result
+
+	if quiet {
+		if result.RetCode != ResultSuccess{
+		return nil
+			//return &appError{fmt.Errorf("run failed, %+v\n",execCmd),"Can't show output row by row ",ResultStartFailed}
+		}
 	}
 
+	job.results <- result
 	return nil
 }
 

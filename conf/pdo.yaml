@@ -12,7 +12,6 @@ plugins:
    - cmdb
    - dns
 input:
-#   from: file
    format: row
    regex: ""
 output:
